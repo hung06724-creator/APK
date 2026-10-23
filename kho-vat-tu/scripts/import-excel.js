@@ -96,7 +96,10 @@ function docSheet(ws, laPhieuNhap) {
 
     const dongKho = dongA(rBatDau + 7);
     header.noi_kho = layGiaTriSauDauHai(dongKho);
-    header.dia_diem = layGiaTriSauDauHai(dongG(rBatDau + 7));
+    // Dòng "Địa điểm ..." ở cột G không có dấu hai chấm nên layGiaTriSauDauHai không
+    // tách được nhãn ra khỏi nội dung — tự bỏ chữ "Địa điểm" ở đầu để khi xuất Excel
+    // (chỗ tự thêm lại nhãn này) không bị lặp.
+    header.dia_diem = dongG(rBatDau + 7).replace(/\s+/g, ' ').trim().replace(/^Địa điểm\s*/i, '');
 
     // Tìm dòng bắt đầu bảng hàng hóa: dòng có cột A = "STT"
     let rHangHoa = null;
@@ -161,6 +164,11 @@ function docSheet(ws, laPhieuNhap) {
     }
     if (!timThayTongCong) tongCong = tongTienHang + tienThue;
 
+    // Ngay sau dòng "Tổng cộng" là dòng "Tổng số tiền (viết bằng chữ)", rồi tới dòng
+    // "Số chứng từ gốc kèm theo :" — lấy đúng vị trí thay vì dò chữ, cho cả 2 sheet.
+    const rChungTu = rTim + 2;
+    header.so_chung_tu_goc = layGiaTriSauDauHai(dongA(rChungTu));
+
     if (items.length > 0) {
       phieuList.push({ ...header, items, tongTienHang, thueSuat, tienThue, tongCong });
     }
@@ -172,9 +180,9 @@ function luuPhieuNhap(p) {
   const info = db
     .prepare(
       `INSERT INTO phieu_nhap
-       (so_phieu, ngay, no_tk, co_tk, nguoi_nhap, don_vi, ly_do_nhap, nhap_tai_kho, dia_diem,
+       (so_phieu, ngay, no_tk, co_tk, nguoi_nhap, don_vi, ly_do_nhap, nhap_tai_kho, dia_diem, so_chung_tu_goc,
         tong_tien_hang, thue_suat, tien_thue, tong_cong, tong_bang_chu, nguon_pdf)
-       VALUES (@so_phieu,@ngay,@no_tk,@co_tk,@nguoi,@don_vi,@ly_do,@noi_kho,@dia_diem,
+       VALUES (@so_phieu,@ngay,@no_tk,@co_tk,@nguoi,@don_vi,@ly_do,@noi_kho,@dia_diem,@so_chung_tu_goc,
                @tongTienHang,@thueSuat,@tienThue,@tongCong,@tongBangChu,'import-excel')`
     )
     .run({ ...p, tongBangChu: soTienBangChu(p.tongCong) });
@@ -194,9 +202,9 @@ function luuPhieuXuat(p) {
   const info = db
     .prepare(
       `INSERT INTO phieu_xuat
-       (so_phieu, ngay, no_tk, co_tk, nguoi_nhan, don_vi, ly_do_xuat, xuat_tai_kho, dia_diem,
+       (so_phieu, ngay, no_tk, co_tk, nguoi_nhan, don_vi, ly_do_xuat, xuat_tai_kho, dia_diem, so_chung_tu_goc,
         tong_tien_hang, thue_suat, tien_thue, tong_cong, tong_bang_chu)
-       VALUES (@so_phieu,@ngay,@no_tk,@co_tk,@nguoi,@don_vi,@ly_do,@noi_kho,@dia_diem,
+       VALUES (@so_phieu,@ngay,@no_tk,@co_tk,@nguoi,@don_vi,@ly_do,@noi_kho,@dia_diem,@so_chung_tu_goc,
                @tongTienHang,@thueSuat,@tienThue,@tongCong,@tongBangChu)`
     )
     .run({ ...p, tongBangChu: soTienBangChu(p.tongCong) });
