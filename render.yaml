@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: kho-vat-tu
+    runtime: node
+    rootDir: kho-vat-tu
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20

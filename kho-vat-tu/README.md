@@ -1,5 +1,20 @@
 # Quản lý kho vật tư
 
+## Dùng ngay qua link, không cần cài gì
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/hung06724-creator/APK)
+
+Bấm nút trên, đăng nhập/tạo tài khoản Render (miễn phí) nếu được hỏi, rồi bấm
+**"Apply"**. Sau 2-3 phút, Render cho một link dạng `https://kho-vat-tu-xxxx.onrender.com`
+— mở link đó là dùng được, không cần Node.js hay PowerShell.
+
+**Lưu ý về gói miễn phí của Render:**
+- Server "ngủ" sau 15 phút không ai truy cập, lần mở lại đầu tiên sẽ chậm khoảng
+  30-50 giây để "thức dậy" — bình thường, không phải lỗi.
+- Dữ liệu (database) có thể bị xóa mỗi khi triển khai lại bản mới (không phải mỗi lần
+  server ngủ/thức). Nếu cần giữ dữ liệu chắc chắn lâu dài, nên chạy trên máy cá nhân
+  (xem phần dưới) hoặc nâng cấp gói có ổ đĩa riêng của Render.
+
 Website chạy trên máy cá nhân (localhost), giúp:
 - Upload hóa đơn PDF → tự động trích xuất → tạo **phiếu nhập kho**.
 - Tạo **phiếu xuất kho**, tự kiểm tra không cho xuất vượt tồn.
