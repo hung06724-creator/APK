@@ -173,6 +173,10 @@ const CAU_HINH_MAC_DINH = {
   ghi_chu_thong_tu_2: 'ngày 27 tháng 10 năm 2025 của Bộ trưởng Bộ Tài chính',
   nguoi_ky_nhap: 'Người lập phiếu, Người giao hàng, Thủ kho, Kế toán trưởng',
   nguoi_ky_xuat: 'Người lập phiếu, Người nhận hàng, Thủ kho, Kế toán trưởng, P. Hiệu trưởng',
+  // Tên người ký thật (theo đúng thứ tự chức danh ở trên), in sẵn dưới dòng "(Ký, họ
+  // tên)" — để trống thì không in dòng tên (chỉ còn dòng chức danh + chỗ ký tay).
+  ten_nguoi_ky_nhap: '',
+  ten_nguoi_ky_xuat: '',
 };
 
 function layCauHinh() {

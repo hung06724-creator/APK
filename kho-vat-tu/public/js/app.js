@@ -647,7 +647,9 @@ async function taiCauHinh() {
   document.getElementById('ch-ghi-chu-tt').value = ch.ghi_chu_thong_tu || '';
   document.getElementById('ch-ghi-chu-tt-2').value = ch.ghi_chu_thong_tu_2 || '';
   document.getElementById('ch-nguoi-ky-nhap').value = ch.nguoi_ky_nhap || '';
+  document.getElementById('ch-ten-nguoi-ky-nhap').value = ch.ten_nguoi_ky_nhap || '';
   document.getElementById('ch-nguoi-ky-xuat').value = ch.nguoi_ky_xuat || '';
+  document.getElementById('ch-ten-nguoi-ky-xuat').value = ch.ten_nguoi_ky_xuat || '';
 }
 
 document.getElementById('ch-luu').addEventListener('click', async () => {
@@ -658,7 +660,9 @@ document.getElementById('ch-luu').addEventListener('click', async () => {
     ghi_chu_thong_tu: document.getElementById('ch-ghi-chu-tt').value.trim(),
     ghi_chu_thong_tu_2: document.getElementById('ch-ghi-chu-tt-2').value.trim(),
     nguoi_ky_nhap: document.getElementById('ch-nguoi-ky-nhap').value.trim(),
+    ten_nguoi_ky_nhap: document.getElementById('ch-ten-nguoi-ky-nhap').value.trim(),
     nguoi_ky_xuat: document.getElementById('ch-nguoi-ky-xuat').value.trim(),
+    ten_nguoi_ky_xuat: document.getElementById('ch-ten-nguoi-ky-xuat').value.trim(),
   };
   try {
     await goiApi('/api/cau-hinh', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

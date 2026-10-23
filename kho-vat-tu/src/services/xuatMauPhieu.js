@@ -69,16 +69,23 @@ function dongTongVal() {
 }
 
 // Danh sách người ký (lấy từ cấu hình, phân tách bằng dấu phẩy) → ghép thành 1 dòng
-// có khoảng cách đều nhau, và 1 dòng "(Ký, họ tên)" lặp lại tương ứng.
-function dongNhanKy(nguoiKyCsv) {
+// chức danh có khoảng cách đều nhau, 1 dòng "(Ký, họ tên)" lặp lại tương ứng, và (nếu
+// có cấu hình tên) 1 dòng tên thật in sẵn dưới chỗ ký — đúng theo đủ số chức danh,
+// thiếu tên ở vị trí nào thì để trống vị trí đó (không làm lệch các vị trí khác).
+function dongNhanKy(nguoiKyCsv, tenNguoiKyCsv) {
   const ds = String(nguoiKyCsv || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  const tenDs = String(tenNguoiKyCsv || '')
+    .split(',')
+    .map((s) => s.trim());
+  const coTen = tenDs.some(Boolean);
   const KHOANG_CACH = '          ';
   return {
     nhan: '  ' + ds.join(KHOANG_CACH),
     kyHoTen: '  ' + ds.map(() => '( Ký , họ tên)').join(KHOANG_CACH),
+    ten: coTen ? '  ' + ds.map((_, i) => tenDs[i] || '').join(KHOANG_CACH) : null,
   };
 }
 
@@ -107,6 +114,8 @@ function taoFilePhieu(phieu, items, loai, cauHinh = {}) {
     ghi_chu_thong_tu_2: 'ngày 27 tháng 10 năm 2025 của Bộ trưởng Bộ Tài chính',
     nguoi_ky_nhap: 'Người lập phiếu, Người giao hàng, Thủ kho, Kế toán trưởng',
     nguoi_ky_xuat: 'Người lập phiếu, Người nhận hàng, Thủ kho, Kế toán trưởng, P. Hiệu trưởng',
+    ten_nguoi_ky_nhap: '',
+    ten_nguoi_ky_xuat: '',
     ...cauHinh,
   };
   const wb = new ExcelJS.Workbook();
@@ -207,13 +216,23 @@ function taoFilePhieu(phieu, items, loai, cauHinh = {}) {
   ws.getRow(r).height = chieuCaoChoDong(dongChungTu, 110);
   r++; // dòng nhãn chữ ký nằm ngay sau, không có dòng trống (đúng theo mẫu gốc)
 
-  const { nhan, kyHoTen } = dongNhanKy(laNhap ? ch.nguoi_ky_nhap : ch.nguoi_ky_xuat);
+  const { nhan, kyHoTen, ten } = dongNhanKy(
+    laNhap ? ch.nguoi_ky_nhap : ch.nguoi_ky_xuat,
+    laNhap ? ch.ten_nguoi_ky_nhap : ch.ten_nguoi_ky_xuat
+  );
   ws.mergeCells(`A${r}:I${r}`);
   datO(ws, `A${r}`, nhan, KIEU.nhanKy);
   r++;
   ws.mergeCells(`A${r}:I${r}`);
   datO(ws, `A${r}`, kyHoTen, { font: fontThuong({ italic: true }), alignment: { horizontal: 'center' } });
-  ws.getRow(r).height = 50; // chừa chỗ ký tay bên dưới dòng "(Ký, họ tên)"
+  ws.getRow(r).height = ten ? 36 : 50; // có dòng tên thì bớt khoảng trắng chừa ký tay lại
+  r++;
+
+  if (ten) {
+    ws.mergeCells(`A${r}:I${r}`);
+    datO(ws, `A${r}`, ten, { font: fontThuong({ bold: true }), alignment: { horizontal: 'center' } });
+    ws.getRow(r).height = 18;
+  }
 
   return wb;
 }
