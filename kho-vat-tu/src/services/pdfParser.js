@@ -15,6 +15,9 @@ const DVT_LIST = [
   'Bình', 'Tờ', 'M²', 'M2', 'Đôi', 'Thùng', 'Tấm', 'Lít', 'Bao', 'Thanh', 'm',
 ];
 const DVT_ALT = DVT_LIST.map((d) => d.replace(/[²]/g, '\\u00b2')).join('|');
+// Một số hóa đơn ghi thêm chữ ngay sau ĐVT (vd: "Tờ A4", "Chai 500ml") — cho phép có
+// tối đa 1 từ ngắn theo sau để không làm gãy khớp dòng.
+const DVT_ALT_TUY = `(?:${DVT_ALT})(?:\\s+[\\p{L}\\d]{1,6})?`;
 
 const SO_VN = '\\d{1,3}(?:\\.\\d{3})*(?:,\\d+)?'; // vd: 1.259.259  hoặc  12.592,59
 
@@ -111,15 +114,17 @@ function timNguoiBan(text) {
   return { tenNguoiBan: null };
 }
 
-// Cắt bỏ phần header phía trên bảng hàng hóa (tên đơn vị, địa chỉ, mã số thuế...)
-// để tránh dòng hàng đầu tiên "nuốt" nhầm toàn bộ văn bản phía trước nó.
-function vungVanBanHangHoa(text) {
-  const m = text.match(/Tiền thuế[^\n]*\n?/i) || text.match(/Thành tiền[^\n]*\n?/i);
+// Cắt bỏ phần header phía trên bảng hàng hóa của MỘT TRANG (tên đơn vị, địa chỉ, mã
+// số thuế, tiêu đề cột...) để dòng hàng đầu tiên của trang đó không bị "nuốt" nhầm
+// toàn bộ văn bản phía trước nó.
+function catBoTieuDeMotTrang(text) {
+  // "(?<!Thành )" để không khớp nhầm vào ranh giới 2 từ "Thành tiền" + "Thuế suất"
+  // (chữ "tiền" ở cuối "Thành tiền" nối liền "Thuế" ở đầu "Thuế suất" thành "tiền Thuế").
+  const m = text.match(/(?<!Thành )Tiền thuế[^\n]*\n?/i) || text.match(/Thành tiền[^\n]*\n?/i);
   const start = m ? m.index + m[0].length : 0;
 
   // Bỏ các dòng nhiễu ngay sau tiêu đề bảng: dòng chỉ có "(Tax Amount)", hoặc dòng
-  // chỉ số cột kiểu "1 2 3 4 5 6 = 4 x 5 7 8 = 6 x 7" — nếu không bỏ, dòng hàng đầu
-  // tiên sẽ bị "nuốt" nhầm các dòng này vào tên hàng.
+  // chỉ số cột kiểu "1 2 3 4 5 6 = 4 x 5 7 8 = 6 x 7".
   const dongList = text.slice(start).split('\n');
   let i = 0;
   while (i < dongList.length) {
@@ -135,6 +140,33 @@ function vungVanBanHangHoa(text) {
   return dongList.slice(i).join('\n');
 }
 
+// Cắt bỏ phần chân trang (ghi chú "Cần kiểm tra, đối chiếu...", tên phần mềm phát
+// hành, mã tra cứu...) — phần này xuất hiện ở CUỐI MỖI TRANG trong hóa đơn nhiều
+// trang. Nếu không cắt, dòng hàng cuối cùng của trang sẽ bị "nuốt" nhầm luôn cả chân
+// trang lẫn phần tiêu đề lặp lại ở đầu trang kế tiếp vào tên hàng của nó.
+function catBoChanTrang(text) {
+  // Mỗi phần mềm ghi chân trang khác nhau: Bkav/EInvoice ghi "(Cần kiểm tra...)",
+  // MISA ghi "tiếp theo trang trước – trang X/Y" (không dấu, do PDF nhúng sẵn vậy).
+  // Cắt tại dấu hiệu nào xuất hiện SỚM NHẤT.
+  // ...và dòng số trang đứng riêng kiểu "2/7" ở cuối trang — nếu không cắt, số trang
+  // này dễ bị hiểu nhầm thành STT của dòng hàng kế tiếp khi ghép nối các trang lại.
+  const cacMoc = [/\(Cần kiểm tra/i, /ti[eế]p theo trang tr[uướ][oớ]c/i, /^\s*\d{1,3}\s*\/\s*\d{1,3}\s*$/m]
+    .map((re) => text.match(re))
+    .filter(Boolean);
+  if (cacMoc.length === 0) return text;
+  const viTriSom = Math.min(...cacMoc.map((m) => m.index));
+  return text.slice(0, viTriSom);
+}
+
+// Hóa đơn PDF nhiều trang: mỗi trang thường lặp lại toàn bộ phần tiêu đề (tên đơn vị
+// bán/mua, tiêu đề cột...) và có chân trang riêng. Xử lý TỪNG TRANG một (cắt tiêu đề
+// + chân trang của riêng trang đó) rồi mới ghép bảng hàng hóa của các trang lại, để
+// không bị lẫn rác giữa các trang vào tên hàng.
+function vungVanBanHangHoa(pages, textGop) {
+  if (!pages || pages.length === 0) return catBoTieuDeMotTrang(textGop);
+  return pages.map((p) => catBoChanTrang(catBoTieuDeMotTrang(p.text))).join('\n');
+}
+
 function kiemTraTruongLaNguoiBan(text) {
   const matches = [...text.matchAll(/\b(\d[\d\s]{8,12}\d)\b/g)]
     .map((m) => m[1].replace(/\s+/g, ''))
@@ -145,8 +177,8 @@ function kiemTraTruongLaNguoiBan(text) {
 // Trích các dòng hàng hóa dạng có cột Thuế suất/Tiền thuế (Bkav, MISA...)
 function trichDongHangCoThue(text) {
   const re = new RegExp(
-    `(\\d{1,3})\\s+([\\s\\S]+?)\\s+(${DVT_ALT})\\s+(${SO_VN})\\s+(${SO_VN})\\s+(${SO_VN})\\s+(\\d{1,2})%\\s+(${SO_VN})`,
-    'g'
+    `(\\d{1,3})\\s+([\\s\\S]+?)\\s+(${DVT_ALT_TUY})\\s+(${SO_VN})\\s+(${SO_VN})\\s+(${SO_VN})\\s+(\\d{1,2})%\\s+(${SO_VN})`,
+    'gu'
   );
   const out = [];
   let m;
@@ -169,8 +201,8 @@ function trichDongHangCoThue(text) {
 // Trích các dòng hàng hóa dạng không có cột thuế (EInvoice, M-Invoice đơn giản)
 function trichDongHangKhongThue(text) {
   const re = new RegExp(
-    `(\\d{1,3})\\s+([\\s\\S]+?)\\s+(${DVT_ALT})\\s+(${SO_VN})\\s+(${SO_VN})\\s+(${SO_VN})(?=\\s|$)`,
-    'g'
+    `(\\d{1,3})\\s+([\\s\\S]+?)\\s+(${DVT_ALT_TUY})\\s+(${SO_VN})\\s+(${SO_VN})\\s+(${SO_VN})(?=\\s|$)`,
+    'gu'
   );
   const out = [];
   let m;
@@ -198,7 +230,7 @@ function phatHienNhaCungCapPhanMem(text) {
 
 async function parsePdfBuffer(buffer) {
   const parser = new PDFParse({ data: buffer });
-  const { text } = await parser.getText();
+  const { text, pages } = await parser.getText();
   await parser.destroy();
 
   const warnings = [];
@@ -216,7 +248,7 @@ async function parsePdfBuffer(buffer) {
     );
   }
 
-  const vungHangHoa = vungVanBanHangHoa(text);
+  const vungHangHoa = vungVanBanHangHoa(pages, text);
   let items = trichDongHangCoThue(vungHangHoa);
   if (items.length === 0) items = trichDongHangKhongThue(vungHangHoa);
   if (items.length === 0) {
