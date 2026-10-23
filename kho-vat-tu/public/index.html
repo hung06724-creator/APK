@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quản lý kho vật tư</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header>
+    <h1>📦 Quản lý kho vật tư</h1>
+    <nav>
+      <button data-tab="ton-kho" class="active">Tồn kho</button>
+      <button data-tab="phieu-nhap">Phiếu nhập</button>
+      <button data-tab="phieu-xuat">Phiếu xuất</button>
+      <button data-tab="tao-nhap">+ Phiếu nhập mới</button>
+      <button data-tab="tao-xuat">+ Phiếu xuất mới</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- TỒN KHO -->
+    <section id="ton-kho" class="panel active">
+      <div class="card">
+        <h2>Tồn kho hiện tại</h2>
+        <table>
+          <thead>
+            <tr><th>Tên hàng</th><th>ĐVT</th><th>Tổng nhập</th><th>Tổng xuất</th><th>Tồn kho</th></tr>
+          </thead>
+          <tbody id="bang-ton-kho"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- DANH SÁCH PHIẾU NHẬP -->
+    <section id="phieu-nhap" class="panel">
+      <div class="card">
+        <h2>Danh sách phiếu nhập kho</h2>
+        <table>
+          <thead><tr><th>Số phiếu</th><th>Ngày</th><th>Nhà cung cấp</th><th>Người nhập</th><th>Số dòng</th><th>Tổng cộng</th><th></th></tr></thead>
+          <tbody id="bang-phieu-nhap"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- DANH SÁCH PHIẾU XUẤT -->
+    <section id="phieu-xuat" class="panel">
+      <div class="card">
+        <h2>Danh sách phiếu xuất kho</h2>
+        <table>
+          <thead><tr><th>Số phiếu</th><th>Ngày</th><th>Người nhận</th><th>Lý do xuất</th><th>Số dòng</th><th>Tổng cộng</th><th></th></tr></thead>
+          <tbody id="bang-phieu-xuat"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TẠO PHIẾU NHẬP -->
+    <section id="tao-nhap" class="panel">
+      <div class="card">
+        <h2>Tạo phiếu nhập từ hóa đơn PDF</h2>
+        <div id="upload-vung" class="upload-vung">
+          <input type="file" id="input-pdf" accept="application/pdf" style="display:none" />
+          Kéo thả file PDF hóa đơn vào đây, hoặc bấm để chọn file<br />
+          <small>Hệ thống sẽ cố gắng tự điền thông tin — luôn kiểm tra lại trước khi lưu.</small>
+        </div>
+        <div id="upload-canh-bao"></div>
+      </div>
+
+      <div class="card">
+        <h2>Thông tin phiếu nhập kho</h2>
+        <div class="form-grid">
+          <div><label>Số phiếu</label><input id="pn-so-phieu" placeholder="PN 01" /></div>
+          <div><label>Ngày nhập</label><input id="pn-ngay" type="date" /></div>
+          <div><label>Nhà cung cấp</label><input id="pn-nha-cung-cap" /></div>
+          <div><label>Nợ TK</label><input id="pn-no-tk" placeholder="156" /></div>
+          <div><label>Có TK</label><input id="pn-co-tk" placeholder="331" /></div>
+          <div><label>Số chứng từ gốc kèm theo</label><input id="pn-chung-tu" placeholder="01 Hóa đơn GTGT số ..." /></div>
+          <div><label>Người nhập</label><input id="pn-nguoi-nhap" /></div>
+          <div><label>Đơn vị</label><input id="pn-don-vi" /></div>
+          <div><label>Nhập tại kho</label><input id="pn-nhap-tai-kho" /></div>
+          <div style="grid-column: span 2"><label>Lý do nhập</label><input id="pn-ly-do" /></div>
+          <div><label>Địa điểm</label><input id="pn-dia-diem" /></div>
+        </div>
+
+        <div class="vung-items">
+          <table>
+            <thead>
+              <tr><th>STT</th><th>Tên hàng</th><th>Mã số</th><th>ĐVT</th><th>SL chứng từ</th><th>SL thực nhập</th><th>Đơn giá</th><th>Thành tiền</th><th></th></tr>
+            </thead>
+            <tbody id="bang-dong-nhap"></tbody>
+          </table>
+        </div>
+        <button class="nut phu" id="them-dong-nhap" type="button" style="margin-top:8px">+ Thêm dòng</button>
+
+        <div class="form-grid hai-cot" style="margin-top:16px">
+          <div><label>Thuế suất (%)</label><input id="pn-thue-suat" type="number" value="8" /></div>
+          <div></div>
+        </div>
+        <div class="tong-ket">
+          <div>Cộng tiền hàng: <b id="pn-tong-hang">0</b></div>
+          <div>Tiền thuế: <b id="pn-tien-thue">0</b></div>
+          <div>Tổng cộng: <b id="pn-tong-cong">0</b></div>
+        </div>
+        <div id="pn-loi" class="loi"></div>
+        <div style="margin-top:16px; text-align:right">
+          <button class="nut" id="luu-phieu-nhap">💾 Lưu phiếu nhập kho</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TẠO PHIẾU XUẤT -->
+    <section id="tao-xuat" class="panel">
+      <div class="card">
+        <h2>Thông tin phiếu xuất kho</h2>
+        <div class="form-grid">
+          <div><label>Số phiếu</label><input id="px-so-phieu" placeholder="PX 01" /></div>
+          <div><label>Ngày xuất</label><input id="px-ngay" type="date" /></div>
+          <div><label>Người nhận</label><input id="px-nguoi-nhan" /></div>
+          <div><label>Nợ TK</label><input id="px-no-tk" /></div>
+          <div><label>Có TK</label><input id="px-co-tk" placeholder="156" /></div>
+          <div><label>Đơn vị</label><input id="px-don-vi" /></div>
+          <div style="grid-column: span 2"><label>Lý do xuất</label><input id="px-ly-do" /></div>
+          <div><label>Xuất tại kho</label><input id="px-xuat-tai-kho" /></div>
+          <div><label>Địa điểm</label><input id="px-dia-diem" /></div>
+        </div>
+
+        <div class="vung-items">
+          <table>
+            <thead>
+              <tr><th>STT</th><th>Vật tư (chọn từ tồn kho)</th><th>ĐVT</th><th>Tồn kho</th><th>SL yêu cầu</th><th>SL thực xuất</th><th>Đơn giá</th><th>Thành tiền</th><th></th></tr>
+            </thead>
+            <tbody id="bang-dong-xuat"></tbody>
+          </table>
+        </div>
+        <button class="nut phu" id="them-dong-xuat" type="button" style="margin-top:8px">+ Thêm dòng</button>
+
+        <div class="form-grid hai-cot" style="margin-top:16px">
+          <div><label>Thuế suất (%)</label><input id="px-thue-suat" type="number" value="0" /></div>
+          <div></div>
+        </div>
+        <div class="tong-ket">
+          <div>Cộng tiền hàng: <b id="px-tong-hang">0</b></div>
+          <div>Tiền thuế: <b id="px-tien-thue">0</b></div>
+          <div>Tổng cộng: <b id="px-tong-cong">0</b></div>
+        </div>
+        <div id="px-loi" class="loi"></div>
+        <div style="margin-top:16px; text-align:right">
+          <button class="nut" id="luu-phieu-xuat">💾 Lưu phiếu xuất kho</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
