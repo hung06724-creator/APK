@@ -68,11 +68,8 @@ function dongTongVal() {
   return { font: fontDen(), alignment: { horizontal: 'center', vertical: 'middle' }, border: vienBox, numFmt: NUMFMT_INT };
 }
 
-// Danh sách người ký (lấy từ cấu hình, phân tách bằng dấu phẩy) → ghép thành 1 dòng
-// chức danh có khoảng cách đều nhau, 1 dòng "(Ký, họ tên)" lặp lại tương ứng, và (nếu
-// có cấu hình tên) 1 dòng tên thật in sẵn dưới chỗ ký — đúng theo đủ số chức danh,
-// thiếu tên ở vị trí nào thì để trống vị trí đó (không làm lệch các vị trí khác).
-function dongNhanKy(nguoiKyCsv, tenNguoiKyCsv) {
+// Tách chuỗi người ký (phân tách bằng dấu phẩy) thành mảng chức danh + mảng tên.
+function tachNguoiKy(nguoiKyCsv, tenNguoiKyCsv) {
   const ds = String(nguoiKyCsv || '')
     .split(',')
     .map((s) => s.trim())
@@ -80,13 +77,53 @@ function dongNhanKy(nguoiKyCsv, tenNguoiKyCsv) {
   const tenDs = String(tenNguoiKyCsv || '')
     .split(',')
     .map((s) => s.trim());
-  const coTen = tenDs.some(Boolean);
-  const KHOANG_CACH = '          ';
-  return {
-    nhan: '  ' + ds.join(KHOANG_CACH),
-    kyHoTen: '  ' + ds.map(() => '( Ký , họ tên)').join(KHOANG_CACH),
-    ten: coTen ? '  ' + ds.map((_, i) => tenDs[i] || '').join(KHOANG_CACH) : null,
-  };
+  return { ds, tenDs, coTen: tenDs.some(Boolean) };
+}
+
+// Chia 9 cột (A..I) thành N phần gần đều nhau cho N người ký — mỗi người 1 cột riêng,
+// thay vì ghép chung 1 chuỗi có dấu cách thủ công (dễ bị lệch, dính sát nhau khi mở
+// bằng font/khổ khác). Trả về mảng {colStart, colEnd} (1 = cột A).
+function chiaCotNguoiKy(soNguoi) {
+  const ket = [];
+  for (let i = 0; i < soNguoi; i++) {
+    const start = Math.floor((i * 9) / soNguoi) + 1;
+    const end = Math.floor(((i + 1) * 9) / soNguoi);
+    ket.push({ start, end: Math.max(start, end) });
+  }
+  return ket;
+}
+function chuCot(so) {
+  return String.fromCharCode(64 + so); // 1 -> A, 9 -> I
+}
+
+// Viết dòng chữ ký: mỗi người ký nằm trong 1 cụm ô riêng (chia đều theo chiều ngang),
+// gồm 1-2 dòng chức danh + "(Ký, họ tên)" + (nếu có) tên thật — KHÔNG gộp chung 1 ô.
+function vietDongChuKy(ws, rBatDau, nguoiKyCsv, tenNguoiKyCsv) {
+  const { ds, tenDs, coTen } = tachNguoiKy(nguoiKyCsv, tenNguoiKyCsv);
+  if (ds.length === 0) return rBatDau;
+  const cacCot = chiaCotNguoiKy(ds.length);
+
+  ds.forEach((chucDanh, i) => {
+    const { start, end } = cacCot[i];
+    const diaChiNhan = `${chuCot(start)}${rBatDau}`;
+    if (end > start) ws.mergeCells(`${diaChiNhan}:${chuCot(end)}${rBatDau}`);
+    datO(ws, diaChiNhan, chucDanh, KIEU.nhanKy);
+
+    const diaChiKy = `${chuCot(start)}${rBatDau + 1}`;
+    if (end > start) ws.mergeCells(`${diaChiKy}:${chuCot(end)}${rBatDau + 1}`);
+    datO(ws, diaChiKy, '( Ký , họ tên)', { font: fontThuong({ italic: true }), alignment: { horizontal: 'center' } });
+
+    if (coTen) {
+      const diaChiTen = `${chuCot(start)}${rBatDau + 2}`;
+      if (end > start) ws.mergeCells(`${diaChiTen}:${chuCot(end)}${rBatDau + 2}`);
+      datO(ws, diaChiTen, tenDs[i] || '', { font: fontThuong({ bold: true }), alignment: { horizontal: 'center' } });
+    }
+  });
+
+  ws.getRow(rBatDau).height = 18;
+  ws.getRow(rBatDau + 1).height = coTen ? 36 : 50;
+  if (coTen) ws.getRow(rBatDau + 2).height = 18;
+  return rBatDau + (coTen ? 3 : 2);
 }
 
 function datO(ws, diaChi, giaTri, kieu) {
@@ -216,23 +253,7 @@ function taoFilePhieu(phieu, items, loai, cauHinh = {}) {
   ws.getRow(r).height = chieuCaoChoDong(dongChungTu, 110);
   r++; // dòng nhãn chữ ký nằm ngay sau, không có dòng trống (đúng theo mẫu gốc)
 
-  const { nhan, kyHoTen, ten } = dongNhanKy(
-    laNhap ? ch.nguoi_ky_nhap : ch.nguoi_ky_xuat,
-    laNhap ? ch.ten_nguoi_ky_nhap : ch.ten_nguoi_ky_xuat
-  );
-  ws.mergeCells(`A${r}:I${r}`);
-  datO(ws, `A${r}`, nhan, KIEU.nhanKy);
-  r++;
-  ws.mergeCells(`A${r}:I${r}`);
-  datO(ws, `A${r}`, kyHoTen, { font: fontThuong({ italic: true }), alignment: { horizontal: 'center' } });
-  ws.getRow(r).height = ten ? 36 : 50; // có dòng tên thì bớt khoảng trắng chừa ký tay lại
-  r++;
-
-  if (ten) {
-    ws.mergeCells(`A${r}:I${r}`);
-    datO(ws, `A${r}`, ten, { font: fontThuong({ bold: true }), alignment: { horizontal: 'center' } });
-    ws.getRow(r).height = 18;
-  }
+  vietDongChuKy(ws, r, laNhap ? ch.nguoi_ky_nhap : ch.nguoi_ky_xuat, laNhap ? ch.ten_nguoi_ky_nhap : ch.ten_nguoi_ky_xuat);
 
   return wb;
 }
