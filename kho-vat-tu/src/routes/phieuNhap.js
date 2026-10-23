@@ -1,6 +1,7 @@
 const express = require('express');
 const { db, findOrCreateVatTu } = require('../db');
 const { soTienBangChu } = require('../services/soTienBangChu');
+const { taoFilePhieu } = require('../services/xuatMauPhieu');
 
 const router = express.Router();
 
@@ -19,6 +20,17 @@ router.get('/:id', (req, res) => {
   if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu nhập' });
   const items = db.prepare('SELECT * FROM phieu_nhap_items WHERE phieu_nhap_id = ? ORDER BY stt').all(req.params.id);
   res.json({ ...phieu, items });
+});
+
+router.get('/:id/xuat-excel', async (req, res) => {
+  const phieu = db.prepare('SELECT * FROM phieu_nhap WHERE id = ?').get(req.params.id);
+  if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu nhập' });
+  const items = db.prepare('SELECT * FROM phieu_nhap_items WHERE phieu_nhap_id = ? ORDER BY stt').all(req.params.id);
+  const wb = taoFilePhieu(phieu, items, 'nhap');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="PhieuNhapKho_${phieu.so_phieu || phieu.id}.xlsx"`);
+  await wb.xlsx.write(res);
+  res.end();
 });
 
 // body: { so_phieu, ngay, no_tk, co_tk, nguoi_nhap, don_vi, ly_do_nhap, nhap_tai_kho,

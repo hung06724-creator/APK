@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS phieu_xuat (
   ly_do_xuat TEXT,
   xuat_tai_kho TEXT,
   dia_diem TEXT,
+  so_chung_tu_goc TEXT,
   tong_tien_hang REAL DEFAULT 0,
   thue_suat REAL DEFAULT 0,
   tien_thue REAL DEFAULT 0,
@@ -95,6 +96,16 @@ CREATE TABLE IF NOT EXISTS phieu_xuat_items (
 CREATE INDEX IF NOT EXISTS idx_pxi_phieu ON phieu_xuat_items(phieu_xuat_id);
 CREATE INDEX IF NOT EXISTS idx_pxi_vattu ON phieu_xuat_items(vat_tu_id);
 `);
+
+// Thêm cột mới cho database cũ đã tạo từ trước (CREATE TABLE IF NOT EXISTS không tự
+// thêm cột vào bảng đã có sẵn).
+function damBaoCoCot(bang, cot, dinhNghia) {
+  const cotHienCo = db.prepare(`PRAGMA table_info(${bang})`).all().map((c) => c.name);
+  if (!cotHienCo.includes(cot)) {
+    db.exec(`ALTER TABLE ${bang} ADD COLUMN ${cot} ${dinhNghia}`);
+  }
+}
+damBaoCoCot('phieu_xuat', 'so_chung_tu_goc', 'TEXT');
 
 // Tìm vật tư theo đúng tên (không phân biệt hoa thường/khoảng trắng thừa), tạo mới nếu chưa có.
 function findOrCreateVatTu({ ten_hang, dvt, ma_so }) {

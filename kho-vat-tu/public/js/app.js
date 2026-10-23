@@ -72,7 +72,10 @@ async function taiDanhSachPhieuNhap() {
     tr.innerHTML = `
       <td>${r.so_phieu || ''}</td><td>${r.ngay || ''}</td><td>${r.nha_cung_cap || ''}</td>
       <td>${r.nguoi_nhap || ''}</td><td>${r.so_dong}</td><td class="so">${formatSo(r.tong_cong)}</td>
-      <td><button class="nut nguy" data-xoa-nhap="${r.id}">Xóa</button></td>`;
+      <td>
+        <a class="nut phu" href="/api/phieu-nhap/${r.id}/xuat-excel">Xuất Excel</a>
+        <button class="nut nguy" data-xoa-nhap="${r.id}">Xóa</button>
+      </td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('[data-xoa-nhap]').forEach((btn) =>
@@ -98,7 +101,10 @@ async function taiDanhSachPhieuXuat() {
     tr.innerHTML = `
       <td>${r.so_phieu || ''}</td><td>${r.ngay || ''}</td><td>${r.nguoi_nhan || ''}</td>
       <td>${r.ly_do_xuat || ''}</td><td>${r.so_dong}</td><td class="so">${formatSo(r.tong_cong)}</td>
-      <td><button class="nut nguy" data-xoa-xuat="${r.id}">Xóa</button></td>`;
+      <td>
+        <a class="nut phu" href="/api/phieu-xuat/${r.id}/xuat-excel">Xuất Excel</a>
+        <button class="nut nguy" data-xoa-xuat="${r.id}">Xóa</button>
+      </td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('[data-xoa-xuat]').forEach((btn) =>
@@ -379,6 +385,7 @@ document.getElementById('luu-phieu-xuat').addEventListener('click', async () => 
     ly_do_xuat: val('px-ly-do'),
     xuat_tai_kho: val('px-xuat-tai-kho'),
     dia_diem: val('px-dia-diem'),
+    so_chung_tu_goc: val('px-chung-tu'),
     thue_suat: Number(val('px-thue-suat')) || 0,
     items,
   };
@@ -392,7 +399,7 @@ document.getElementById('luu-phieu-xuat').addEventListener('click', async () => 
     dongXuat = [];
     veBangDongXuat();
     capNhatTongXuat();
-    ['px-so-phieu','px-ngay','px-nguoi-nhan','px-no-tk','px-co-tk','px-don-vi','px-ly-do','px-xuat-tai-kho','px-dia-diem']
+    ['px-so-phieu','px-ngay','px-nguoi-nhan','px-no-tk','px-co-tk','px-don-vi','px-ly-do','px-xuat-tai-kho','px-dia-diem','px-chung-tu']
       .forEach((id) => (document.getElementById(id).value = ''));
     chuyenTab('phieu-xuat');
   } catch (err) {

@@ -1,6 +1,7 @@
 const express = require('express');
 const { db, findOrCreateVatTu, tonKhoCuaVatTu } = require('../db');
 const { soTienBangChu } = require('../services/soTienBangChu');
+const { taoFilePhieu } = require('../services/xuatMauPhieu');
 
 const router = express.Router();
 
@@ -19,6 +20,17 @@ router.get('/:id', (req, res) => {
   if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu xuất' });
   const items = db.prepare('SELECT * FROM phieu_xuat_items WHERE phieu_xuat_id = ? ORDER BY stt').all(req.params.id);
   res.json({ ...phieu, items });
+});
+
+router.get('/:id/xuat-excel', async (req, res) => {
+  const phieu = db.prepare('SELECT * FROM phieu_xuat WHERE id = ?').get(req.params.id);
+  if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu xuất' });
+  const items = db.prepare('SELECT * FROM phieu_xuat_items WHERE phieu_xuat_id = ? ORDER BY stt').all(req.params.id);
+  const wb = taoFilePhieu(phieu, items, 'xuat');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="PhieuXuatKho_${phieu.so_phieu || phieu.id}.xlsx"`);
+  await wb.xlsx.write(res);
+  res.end();
 });
 
 // body: { so_phieu, ngay, nguoi_nhan, don_vi, ly_do_xuat, xuat_tai_kho, dia_diem,
@@ -75,9 +87,9 @@ router.post('/', (req, res) => {
     const info = db
       .prepare(
         `INSERT INTO phieu_xuat
-         (so_phieu, ngay, no_tk, co_tk, nguoi_nhan, don_vi, ly_do_xuat, xuat_tai_kho, dia_diem,
+         (so_phieu, ngay, no_tk, co_tk, nguoi_nhan, don_vi, ly_do_xuat, xuat_tai_kho, dia_diem, so_chung_tu_goc,
           tong_tien_hang, thue_suat, tien_thue, tong_cong, tong_bang_chu)
-         VALUES (@so_phieu,@ngay,@no_tk,@co_tk,@nguoi_nhan,@don_vi,@ly_do_xuat,@xuat_tai_kho,@dia_diem,
+         VALUES (@so_phieu,@ngay,@no_tk,@co_tk,@nguoi_nhan,@don_vi,@ly_do_xuat,@xuat_tai_kho,@dia_diem,@so_chung_tu_goc,
                  @tong_tien_hang,@thue_suat,@tien_thue,@tong_cong,@tong_bang_chu)`
       )
       .run({
@@ -90,6 +102,7 @@ router.post('/', (req, res) => {
         ly_do_xuat: b.ly_do_xuat || null,
         xuat_tai_kho: b.xuat_tai_kho || null,
         dia_diem: b.dia_diem || null,
+        so_chung_tu_goc: b.so_chung_tu_goc || null,
         tong_tien_hang: tongTienHang,
         thue_suat: thueSuat,
         tien_thue: tienThue,

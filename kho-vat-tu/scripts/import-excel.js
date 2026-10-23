@@ -87,7 +87,12 @@ function docSheet(ws, laPhieuNhap) {
       header.nguoi = layGiaTriSauDauHai(dongNguoi);
     }
 
-    header.ly_do = dongA(rBatDau + 6).replace(/\s+/g, ' ').trim();
+    // Dòng "lý do" của sheet Nhập là một câu tự nhiên (không có nhãn cố định kiểu
+    // "Nhãn : nội dung"), nên giữ nguyên. Dòng của sheet Xuất luôn có nhãn
+    // "Lý do xuất kho :" ở đầu — bỏ nhãn đó đi để khi xuất Excel không bị lặp
+    // (chỗ xuất Excel sẽ tự thêm lại nhãn này).
+    const dongLyDo = dongA(rBatDau + 6).replace(/\s+/g, ' ').trim();
+    header.ly_do = laPhieuNhap ? dongLyDo : dongLyDo.replace(/^Lý do xuất kho\s*:\s*/i, '');
 
     const dongKho = dongA(rBatDau + 7);
     header.noi_kho = layGiaTriSauDauHai(dongKho);
@@ -108,9 +113,11 @@ function docSheet(ws, laPhieuNhap) {
     while (r <= rKetThuc) {
       const row = ws.getRow(r);
       const stt = laySTT(row.getCell(1).value);
+      // Hết bảng hàng hóa khi không còn STT hợp lệ ở cột A — đáng tin cậy hơn dò
+      // theo chữ "Tổng" ở cột B, vì một số phiếu gốc bị thiếu/xóa nhãn đó.
+      if (stt === null) break;
       const cotB = layChu(row.getCell(2).value);
-      if (cotB.toLowerCase().startsWith('tổng')) break; // hết bảng hàng hóa
-      if (stt !== null && cotB) {
+      if (cotB) {
         items.push({
           stt,
           ten_hang: cotB.replace(/\s+/g, ' ').trim(),
@@ -126,23 +133,33 @@ function docSheet(ws, laPhieuNhap) {
       r++;
     }
 
-    // Dòng "Tổng", "Thuế X%", "Tổng cộng"
-    let tongTienHang = 0,
-      thueSuat = 0,
-      tienThue = 0,
-      tongCong = 0;
-    for (let rr = r; rr <= Math.min(r + 4, rKetThuc); rr++) {
-      const nhan = layChu(ws.getRow(rr).getCell(2).value).toLowerCase();
-      const giaTri = laySo(ws.getRow(rr).getCell(8).value);
-      if (nhan.startsWith('tổng cộng')) tongCong = giaTri;
-      else if (nhan.startsWith('thuế')) {
-        tienThue = giaTri;
-        const mThue = nhan.match(/(\d+)\s*%/);
-        if (mThue) thueSuat = Number(mThue[1]);
-      } else if (nhan.startsWith('tổng')) tongTienHang = giaTri;
-    }
+    // Ngay sau dòng item cuối là dòng "Tổng" (tiền hàng trước thuế) — lấy theo VỊ TRÍ,
+    // không dò nhãn, vì một số phiếu gốc bị thiếu/xóa chữ "Tổng" ở ô này.
+    let tongTienHang = laySo(ws.getRow(r).getCell(8).value);
     if (!tongTienHang) tongTienHang = items.reduce((s, it) => s + it.thanh_tien, 0);
-    if (!tongCong) tongCong = tongTienHang + tienThue;
+
+    // Sau đó dò tới đúng dòng có nhãn "Tổng cộng" — thường chỉ có 1 dòng thuế ở giữa,
+    // nhưng vài phiếu có hóa đơn gộp 2 mức thuế suất (8% và 10%) nên có 2 dòng thuế liên
+    // tiếp; cộng dồn mọi dòng gặp giữa "Tổng" và "Tổng cộng" vào tiền thuế cho đúng.
+    let tienThue = 0;
+    let tongCong = 0;
+    let thueSuat = 0;
+    let rTim = r + 1;
+    let timThayTongCong = false;
+    while (rTim <= Math.min(r + 6, rKetThuc)) {
+      const nhan = layChu(ws.getRow(rTim).getCell(2).value);
+      const giaTri = laySo(ws.getRow(rTim).getCell(8).value);
+      if (nhan.toLowerCase().startsWith('tổng cộng')) {
+        tongCong = giaTri;
+        timThayTongCong = true;
+        break;
+      }
+      tienThue += giaTri;
+      const mThue = nhan.match(/(\d+)\s*%/);
+      if (mThue && !thueSuat) thueSuat = Number(mThue[1]);
+      rTim++;
+    }
+    if (!timThayTongCong) tongCong = tongTienHang + tienThue;
 
     if (items.length > 0) {
       phieuList.push({ ...header, items, tongTienHang, thueSuat, tienThue, tongCong });
