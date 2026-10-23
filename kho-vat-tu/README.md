@@ -83,6 +83,6 @@ scripts/import-excel.js  Nạp dữ liệu lịch sử từ Excel
 
 - Chỉ chạy single-user trên máy cá nhân, chưa có đăng nhập/phân quyền.
 - Trích xuất PDF là "cố gắng tốt nhất", luôn cần xem lại trước khi lưu.
-- Chưa có chức năng xuất phiếu ra file Word/PDF theo đúng mẫu 01-VT/02-VT để in ký tay
-  (có thể làm thêm nếu cần).
+- Xuất phiếu ra Excel đúng mẫu 01-VT/02-VT để in ký tay (nút "Xuất Excel" ở danh sách
+  phiếu nhập/xuất).
 - Chưa có sửa phiếu đã lưu (chỉ xóa rồi tạo lại).
