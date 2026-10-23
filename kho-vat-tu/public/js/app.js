@@ -3,29 +3,35 @@ function formatSo(n) {
   if (n === null || n === undefined || Number.isNaN(n)) return '';
   return Number(n).toLocaleString('vi-VN');
 }
-function elGia(tag, attrs = {}, text) {
-  const e = document.createElement(tag);
-  Object.entries(attrs).forEach(([k, v]) => {
-    if (k === 'class') e.className = v;
-    else e.setAttribute(k, v);
-  });
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
 async function goiApi(url, options) {
   const res = await fetch(url, options);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || 'Lỗi không xác định'), { data });
   return data;
 }
+function hienLoi(el, noiDung) {
+  if (!noiDung) {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+  el.style.display = 'flex';
+  el.innerHTML = `<i class="fas fa-triangle-exclamation"></i><span>${noiDung}</span>`;
+}
+function oTrong(colspan, bieuTuong, noiDung) {
+  return `<tr><td colspan="${colspan}"><div class="ui-empty"><i class="fas fa-${bieuTuong}"></i>${noiDung}</div></td></tr>`;
+}
 
-// ===== Chuyển tab =====
-document.querySelectorAll('nav button').forEach((btn) => {
+// ===== Chuyển tab (menu bên) =====
+document.querySelectorAll('.sidebar .nav-item[data-tab]').forEach((btn) => {
   btn.addEventListener('click', () => chuyenTab(btn.dataset.tab));
 });
+document.querySelectorAll('[data-goto]').forEach((btn) => {
+  btn.addEventListener('click', () => chuyenTab(btn.dataset.goto));
+});
 function chuyenTab(tab) {
-  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
-  document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === tab));
+  document.querySelectorAll('.sidebar .nav-item[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === tab));
   if (tab === 'ton-kho') taiTonKho();
   if (tab === 'phieu-nhap') taiDanhSachPhieuNhap();
   if (tab === 'phieu-xuat') taiDanhSachPhieuXuat();
@@ -35,24 +41,24 @@ function chuyenTab(tab) {
 // ===== TỒN KHO =====
 async function taiTonKho() {
   const tbody = document.getElementById('bang-ton-kho');
-  tbody.innerHTML = '<tr><td colspan="5" class="rong">Đang tải...</td></tr>';
+  tbody.innerHTML = oTrong(5, 'spinner', 'Đang tải...');
   const rows = await goiApi('/api/vat-tu');
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="rong">Chưa có vật tư nào. Tạo phiếu nhập đầu tiên để bắt đầu.</td></tr>';
+    tbody.innerHTML = oTrong(5, 'box-open', 'Chưa có vật tư nào. Tạo phiếu nhập đầu tiên để bắt đầu.');
     return;
   }
   tbody.innerHTML = '';
   rows.forEach((r) => {
     const tr = document.createElement('tr');
-    let badge = '<span class="badge ok">Đủ</span>';
-    if (r.ton_kho < 0) badge = '<span class="badge am">Âm kho!</span>';
-    else if (r.ton_kho === 0) badge = '<span class="badge thap">Hết</span>';
+    let nhan = '<span class="ui-pill ui-tone-primary">Đủ</span>';
+    if (r.ton_kho < 0) nhan = '<span class="ui-pill ui-tone-danger">Âm kho!</span>';
+    else if (r.ton_kho === 0) nhan = '<span class="ui-pill ui-tone-warning">Hết</span>';
     tr.innerHTML = `
       <td>${r.ten_hang}</td>
       <td>${r.dvt || ''}</td>
-      <td class="so">${formatSo(r.tong_nhap)}</td>
-      <td class="so">${formatSo(r.tong_xuat)}</td>
-      <td class="so">${formatSo(r.ton_kho)} ${badge}</td>`;
+      <td class="num">${formatSo(r.tong_nhap)}</td>
+      <td class="num">${formatSo(r.tong_xuat)}</td>
+      <td class="num">${formatSo(r.ton_kho)} ${nhan}</td>`;
     tbody.appendChild(tr);
   });
 }
@@ -60,10 +66,10 @@ async function taiTonKho() {
 // ===== DANH SÁCH PHIẾU NHẬP / XUẤT =====
 async function taiDanhSachPhieuNhap() {
   const tbody = document.getElementById('bang-phieu-nhap');
-  tbody.innerHTML = '<tr><td colspan="7" class="rong">Đang tải...</td></tr>';
+  tbody.innerHTML = oTrong(7, 'spinner', 'Đang tải...');
   const rows = await goiApi('/api/phieu-nhap');
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="rong">Chưa có phiếu nhập nào.</td></tr>';
+    tbody.innerHTML = oTrong(7, 'inbox', 'Chưa có phiếu nhập nào.');
     return;
   }
   tbody.innerHTML = '';
@@ -71,10 +77,10 @@ async function taiDanhSachPhieuNhap() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${r.so_phieu || ''}</td><td>${r.ngay || ''}</td><td>${r.nha_cung_cap || ''}</td>
-      <td>${r.nguoi_nhap || ''}</td><td>${r.so_dong}</td><td class="so">${formatSo(r.tong_cong)}</td>
+      <td>${r.nguoi_nhap || ''}</td><td class="num">${r.so_dong}</td><td class="num">${formatSo(r.tong_cong)}</td>
       <td>
-        <a class="nut phu" href="/api/phieu-nhap/${r.id}/xuat-excel">Xuất Excel</a>
-        <button class="nut nguy" data-xoa-nhap="${r.id}">Xóa</button>
+        <a class="btn btn-sm btn-neutral" href="/api/phieu-nhap/${r.id}/xuat-excel"><i class="fas fa-file-excel"></i> Xuất Excel</a>
+        <button class="btn btn-sm btn-danger" data-xoa-nhap="${r.id}"><i class="fas fa-trash"></i></button>
       </td>`;
     tbody.appendChild(tr);
   });
@@ -89,10 +95,10 @@ async function taiDanhSachPhieuNhap() {
 
 async function taiDanhSachPhieuXuat() {
   const tbody = document.getElementById('bang-phieu-xuat');
-  tbody.innerHTML = '<tr><td colspan="6" class="rong">Đang tải...</td></tr>';
+  tbody.innerHTML = oTrong(6, 'spinner', 'Đang tải...');
   const rows = await goiApi('/api/phieu-xuat');
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="rong">Chưa có phiếu xuất nào.</td></tr>';
+    tbody.innerHTML = oTrong(6, 'inbox', 'Chưa có phiếu xuất nào.');
     return;
   }
   tbody.innerHTML = '';
@@ -100,10 +106,10 @@ async function taiDanhSachPhieuXuat() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${r.so_phieu || ''}</td><td>${r.ngay || ''}</td><td>${r.nguoi_nhan || ''}</td>
-      <td>${r.ly_do_xuat || ''}</td><td>${r.so_dong}</td><td class="so">${formatSo(r.tong_cong)}</td>
+      <td>${r.ly_do_xuat || ''}</td><td class="num">${r.so_dong}</td><td class="num">${formatSo(r.tong_cong)}</td>
       <td>
-        <a class="nut phu" href="/api/phieu-xuat/${r.id}/xuat-excel">Xuất Excel</a>
-        <button class="nut nguy" data-xoa-xuat="${r.id}">Xóa</button>
+        <a class="btn btn-sm btn-neutral" href="/api/phieu-xuat/${r.id}/xuat-excel"><i class="fas fa-file-excel"></i> Xuất Excel</a>
+        <button class="btn btn-sm btn-danger" data-xoa-xuat="${r.id}"><i class="fas fa-trash"></i></button>
       </td>`;
     tbody.appendChild(tr);
   });
@@ -132,20 +138,24 @@ function dongNhapMoi(du = {}) {
 
 function veBangDongNhap() {
   const tbody = document.getElementById('bang-dong-nhap');
+  if (dongNhap.length === 0) {
+    tbody.innerHTML = oTrong(9, 'list', 'Chưa có dòng hàng hóa nào. Tải hóa đơn PDF hoặc bấm "Thêm dòng".');
+    return;
+  }
   tbody.innerHTML = '';
   dongNhap.forEach((d, i) => {
     const thanhTien = (Number(d.sl_thuc_nhap) || 0) * (Number(d.don_gia) || 0);
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${i + 1}</td>
-      <td><input data-i="${i}" data-f="ten_hang" value="${d.ten_hang || ''}" /></td>
-      <td><input data-i="${i}" data-f="ma_so" value="${d.ma_so || ''}" style="width:70px" /></td>
-      <td><input data-i="${i}" data-f="dvt" value="${d.dvt || ''}" style="width:60px" /></td>
-      <td><input data-i="${i}" data-f="sl_chung_tu" type="number" value="${d.sl_chung_tu}" style="width:70px" /></td>
-      <td><input data-i="${i}" data-f="sl_thuc_nhap" type="number" value="${d.sl_thuc_nhap}" style="width:70px" /></td>
-      <td><input data-i="${i}" data-f="don_gia" type="number" value="${d.don_gia}" style="width:90px" /></td>
-      <td class="so">${formatSo(thanhTien)}</td>
-      <td class="hang-xoa" data-xoa="${i}">✕</td>`;
+      <td><input class="ui-input cell text" data-i="${i}" data-f="ten_hang" value="${d.ten_hang || ''}" /></td>
+      <td><input class="ui-input cell ctr" data-i="${i}" data-f="ma_so" value="${d.ma_so || ''}" style="width:64px" /></td>
+      <td><input class="ui-input cell ctr" data-i="${i}" data-f="dvt" value="${d.dvt || ''}" style="width:56px" /></td>
+      <td><input class="ui-input cell" data-i="${i}" data-f="sl_chung_tu" type="number" value="${d.sl_chung_tu}" style="width:72px" /></td>
+      <td><input class="ui-input cell" data-i="${i}" data-f="sl_thuc_nhap" type="number" value="${d.sl_thuc_nhap}" style="width:72px" /></td>
+      <td><input class="ui-input cell" data-i="${i}" data-f="don_gia" type="number" value="${d.don_gia}" style="width:96px" /></td>
+      <td class="num">${formatSo(thanhTien)}</td>
+      <td><button class="btn btn-ghost btn-sm" data-xoa="${i}" type="button"><i class="fas fa-trash"></i></button></td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('input').forEach((inp) =>
@@ -157,9 +167,9 @@ function veBangDongNhap() {
       if (f === 'sl_thuc_nhap' || f === 'don_gia') veBangDongNhap();
     })
   );
-  tbody.querySelectorAll('[data-xoa]').forEach((td) =>
-    td.addEventListener('click', () => {
-      dongNhap.splice(Number(td.dataset.xoa), 1);
+  tbody.querySelectorAll('[data-xoa]').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      dongNhap.splice(Number(btn.dataset.xoa), 1);
       veBangDongNhap();
       capNhatTongNhap();
     })
@@ -183,10 +193,10 @@ document.getElementById('pn-thue-suat').addEventListener('input', capNhatTongNha
 
 document.getElementById('luu-phieu-nhap').addEventListener('click', async () => {
   const loiEl = document.getElementById('pn-loi');
-  loiEl.textContent = '';
+  hienLoi(loiEl, '');
   const items = dongNhap.filter((d) => d.ten_hang && Number(d.sl_thuc_nhap) > 0);
   if (items.length === 0) {
-    loiEl.textContent = 'Cần ít nhất 1 dòng hàng hóa có tên và số lượng thực nhập > 0.';
+    hienLoi(loiEl, 'Cần ít nhất 1 dòng hàng hóa có tên và số lượng thực nhập > 0.');
     return;
   }
   const body = {
@@ -216,9 +226,10 @@ document.getElementById('luu-phieu-nhap').addEventListener('click', async () => 
     capNhatTongNhap();
     ['pn-so-phieu','pn-ngay','pn-nha-cung-cap','pn-no-tk','pn-co-tk','pn-chung-tu','pn-nguoi-nhap','pn-don-vi','pn-nhap-tai-kho','pn-ly-do','pn-dia-diem']
       .forEach((id) => (document.getElementById(id).value = ''));
+    document.getElementById('upload-canh-bao').innerHTML = '';
     chuyenTab('phieu-nhap');
   } catch (err) {
-    loiEl.textContent = err.message;
+    hienLoi(loiEl, err.message);
   }
 });
 
@@ -241,20 +252,22 @@ inputPdf.addEventListener('change', () => {
   if (inputPdf.files[0]) xuLyFilePdf(inputPdf.files[0]);
 });
 
+function dongCanhBao(noiDung, nguy) {
+  return `<div class="ui-note${nguy ? ' danger' : ''}"><i class="fas fa-${nguy ? 'circle-exclamation' : 'triangle-exclamation'}"></i><span>${noiDung}</span></div>`;
+}
+
 async function xuLyFilePdf(file) {
   const canhBaoEl = document.getElementById('upload-canh-bao');
-  canhBaoEl.innerHTML = '<div class="canh-bao">Đang đọc file ' + file.name + '...</div>';
+  canhBaoEl.innerHTML = dongCanhBao('Đang đọc file ' + file.name + '...', false);
   const form = new FormData();
   form.append('file', file);
   try {
     const kq = await goiApi('/api/upload/hoa-don', { method: 'POST', body: form });
     canhBaoEl.innerHTML = '';
     if (kq.truongLaNguoiBan) {
-      canhBaoEl.innerHTML += '<div class="canh-bao nguy">⚠️ Hóa đơn này có vẻ do Trường xuất ra (bán), không phải hóa đơn mua vào. Kiểm tra kỹ trước khi lưu.</div>';
+      canhBaoEl.innerHTML += dongCanhBao('Hóa đơn này có vẻ do Trường xuất ra (bán), không phải hóa đơn mua vào. Kiểm tra kỹ trước khi lưu.', true);
     }
-    (kq.warnings || []).forEach((w) => {
-      canhBaoEl.innerHTML += `<div class="canh-bao">⚠️ ${w}</div>`;
-    });
+    (kq.warnings || []).forEach((w) => { canhBaoEl.innerHTML += dongCanhBao(w, false); });
 
     document.getElementById('pn-ngay').value = kq.ngay || '';
     document.getElementById('pn-nha-cung-cap').value = kq.tenNguoiBan || '';
@@ -273,10 +286,10 @@ async function xuLyFilePdf(file) {
     capNhatTongNhap();
 
     if (kq.tongCong) {
-      canhBaoEl.innerHTML += `<div class="canh-bao">Tổng cộng trên hóa đơn gốc: <b>${formatSo(kq.tongCong)}</b> — so sánh với tổng tính được bên dưới để kiểm tra.</div>`;
+      canhBaoEl.innerHTML += dongCanhBao(`Tổng cộng trên hóa đơn gốc: <b>${formatSo(kq.tongCong)}</b> — so sánh với tổng tính được bên dưới để kiểm tra.`, false);
     }
   } catch (err) {
-    canhBaoEl.innerHTML = `<div class="canh-bao nguy">Lỗi đọc file: ${err.message}</div>`;
+    canhBaoEl.innerHTML = dongCanhBao('Lỗi đọc file: ' + err.message, true);
   }
 }
 
@@ -308,6 +321,10 @@ function dongXuatMoi(du = {}) {
 
 function veBangDongXuat() {
   const tbody = document.getElementById('bang-dong-xuat');
+  if (dongXuat.length === 0) {
+    tbody.innerHTML = oTrong(9, 'list', 'Chưa có dòng hàng hóa nào. Bấm "Thêm dòng" và chọn vật tư từ tồn kho.');
+    return;
+  }
   tbody.innerHTML = '';
   dongXuat.forEach((d, i) => {
     const vatTu = dsVatTu.find((v) => v.ten_hang === d.ten_hang);
@@ -315,16 +332,17 @@ function veBangDongXuat() {
     const thanhTien = (Number(d.sl_thuc_xuat) || 0) * (Number(d.don_gia) || 0);
     const vuotTon = ton !== null && Number(d.sl_thuc_xuat) > ton;
     const tr = document.createElement('tr');
+    if (vuotTon) tr.classList.add('is-danger');
     tr.innerHTML = `
       <td>${i + 1}</td>
-      <td><input list="ds-vat-tu" data-i="${i}" data-f="ten_hang" value="${d.ten_hang || ''}" /></td>
-      <td><input data-i="${i}" data-f="dvt" value="${d.dvt || ''}" style="width:60px" /></td>
-      <td class="so">${ton === null ? '—' : formatSo(ton)}</td>
-      <td><input data-i="${i}" data-f="sl_yeu_cau" type="number" value="${d.sl_yeu_cau}" style="width:70px" /></td>
-      <td><input data-i="${i}" data-f="sl_thuc_xuat" type="number" value="${d.sl_thuc_xuat}" style="width:70px; ${vuotTon ? 'border-color:#dc2626;color:#dc2626' : ''}" /></td>
-      <td><input data-i="${i}" data-f="don_gia" type="number" value="${d.don_gia}" style="width:90px" /></td>
-      <td class="so">${formatSo(thanhTien)}</td>
-      <td class="hang-xoa" data-xoa="${i}">✕</td>`;
+      <td><input class="ui-input cell text" list="ds-vat-tu" data-i="${i}" data-f="ten_hang" value="${d.ten_hang || ''}" /></td>
+      <td><input class="ui-input cell ctr" data-i="${i}" data-f="dvt" value="${d.dvt || ''}" style="width:56px" /></td>
+      <td class="num">${ton === null ? '—' : formatSo(ton)}</td>
+      <td><input class="ui-input cell" data-i="${i}" data-f="sl_yeu_cau" type="number" value="${d.sl_yeu_cau}" style="width:72px" /></td>
+      <td><input class="ui-input cell" data-i="${i}" data-f="sl_thuc_xuat" type="number" value="${d.sl_thuc_xuat}" style="width:72px" /></td>
+      <td><input class="ui-input cell" data-i="${i}" data-f="don_gia" type="number" value="${d.don_gia}" style="width:96px" /></td>
+      <td class="num">${formatSo(thanhTien)}</td>
+      <td><button class="btn btn-ghost btn-sm" data-xoa="${i}" type="button"><i class="fas fa-trash"></i></button></td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('input').forEach((inp) =>
@@ -343,9 +361,9 @@ function veBangDongXuat() {
       if (f === 'sl_thuc_xuat' || f === 'don_gia' || f === 'ten_hang') veBangDongXuat();
     })
   );
-  tbody.querySelectorAll('[data-xoa]').forEach((td) =>
-    td.addEventListener('click', () => {
-      dongXuat.splice(Number(td.dataset.xoa), 1);
+  tbody.querySelectorAll('[data-xoa]').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      dongXuat.splice(Number(btn.dataset.xoa), 1);
       veBangDongXuat();
       capNhatTongXuat();
     })
@@ -369,10 +387,10 @@ document.getElementById('px-thue-suat').addEventListener('input', capNhatTongXua
 
 document.getElementById('luu-phieu-xuat').addEventListener('click', async () => {
   const loiEl = document.getElementById('px-loi');
-  loiEl.textContent = '';
+  hienLoi(loiEl, '');
   const items = dongXuat.filter((d) => d.ten_hang && Number(d.sl_thuc_xuat) > 0);
   if (items.length === 0) {
-    loiEl.textContent = 'Cần ít nhất 1 dòng hàng hóa có tên và số lượng thực xuất > 0.';
+    hienLoi(loiEl, 'Cần ít nhất 1 dòng hàng hóa có tên và số lượng thực xuất > 0.');
     return;
   }
   const body = {
@@ -404,11 +422,11 @@ document.getElementById('luu-phieu-xuat').addEventListener('click', async () => 
     chuyenTab('phieu-xuat');
   } catch (err) {
     if (err.data && err.data.chi_tiet) {
-      loiEl.innerHTML = 'Không đủ tồn kho:<br>' + err.data.chi_tiet
+      hienLoi(loiEl, 'Không đủ tồn kho:<br>' + err.data.chi_tiet
         .map((c) => `- ${c.ten_hang}: tồn ${formatSo(c.ton_kho)}, cần xuất ${formatSo(c.muon_xuat)}`)
-        .join('<br>');
+        .join('<br>'));
     } else {
-      loiEl.textContent = err.message;
+      hienLoi(loiEl, err.message);
     }
   }
 });
