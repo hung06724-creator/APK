@@ -18,6 +18,9 @@ Bấm nút trên, đăng nhập/tạo tài khoản Render (miễn phí) nếu đ
 Website chạy trên máy cá nhân (localhost), giúp:
 - Upload hóa đơn PDF → tự động trích xuất → tạo **phiếu nhập kho**.
 - Tạo **phiếu xuất kho**, tự kiểm tra không cho xuất vượt tồn.
+- Tạo phiếu xuất **lấy sẵn toàn bộ dòng hàng từ 1 phiếu nhập có sẵn**.
+- **Tách 1 phiếu nhập thành nhiều phiếu xuất** cùng lúc: chia đôi cho 2 đơn vị, hoặc
+  tách riêng từng mặt hàng thành từng phiếu xuất khác nhau.
 - Theo dõi **tồn kho** từng vật tư (tồn = tổng nhập − tổng xuất).
 - Nạp dữ liệu lịch sử từ file Excel phiếu nhập/xuất mẫu cũ.
 

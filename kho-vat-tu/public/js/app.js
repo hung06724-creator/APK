@@ -35,7 +35,11 @@ function chuyenTab(tab) {
   if (tab === 'ton-kho') taiTonKho();
   if (tab === 'phieu-nhap') taiDanhSachPhieuNhap();
   if (tab === 'phieu-xuat') taiDanhSachPhieuXuat();
-  if (tab === 'tao-xuat') taiDanhSachVatTuChoXuat();
+  if (tab === 'tao-xuat') {
+    taiDanhSachVatTuChoXuat();
+    taiDanhSachPhieuNhapChoChon('px-chon-phieu-nhap');
+  }
+  if (tab === 'tach-xuat') taiDanhSachPhieuNhapChoChon('tx-phieu-nhap');
 }
 
 // ===== TỒN KHO =====
@@ -420,6 +424,125 @@ document.getElementById('luu-phieu-xuat').addEventListener('click', async () => 
     ['px-so-phieu','px-ngay','px-nguoi-nhan','px-no-tk','px-co-tk','px-don-vi','px-ly-do','px-xuat-tai-kho','px-dia-diem','px-chung-tu']
       .forEach((id) => (document.getElementById(id).value = ''));
     chuyenTab('phieu-xuat');
+  } catch (err) {
+    if (err.data && err.data.chi_tiet) {
+      hienLoi(loiEl, 'Không đủ tồn kho:<br>' + err.data.chi_tiet
+        .map((c) => `- ${c.ten_hang}: tồn ${formatSo(c.ton_kho)}, cần xuất ${formatSo(c.muon_xuat)}`)
+        .join('<br>'));
+    } else {
+      hienLoi(loiEl, err.message);
+    }
+  }
+});
+
+// ===== Chọn phiếu nhập để tự điền phiếu xuất =====
+async function taiDanhSachPhieuNhapChoChon(idSelect) {
+  const ds = await goiApi('/api/phieu-nhap');
+  const sel = document.getElementById(idSelect);
+  const dangChon = sel.value;
+  sel.innerHTML = '<option value="">— Chọn phiếu nhập —</option>' +
+    ds.map((p) => `<option value="${p.id}">${p.so_phieu || '(không số)'} — ${p.ngay || ''} — ${p.nha_cung_cap || ''} (${p.so_dong} dòng)</option>`).join('');
+  sel.value = dangChon;
+}
+
+document.getElementById('px-chon-phieu-nhap').addEventListener('change', async (e) => {
+  const id = e.target.value;
+  if (!id) return;
+  const phieu = await goiApi('/api/phieu-nhap/' + id);
+  document.getElementById('px-so-phieu').value = '';
+  document.getElementById('px-nguoi-nhan').value = '';
+  document.getElementById('px-don-vi').value = phieu.don_vi || '';
+  document.getElementById('px-ly-do').value = `Xuất theo phiếu nhập ${phieu.so_phieu || '#' + phieu.id}`;
+  document.getElementById('px-co-tk').value = phieu.no_tk || '';
+  document.getElementById('px-chung-tu').value = phieu.so_phieu ? `Theo phiếu nhập ${phieu.so_phieu}` : '';
+  dongXuat = (phieu.items || []).map((it) =>
+    dongXuatMoi({
+      vat_tu_id: it.vat_tu_id, ten_hang: it.ten_hang, dvt: it.dvt,
+      sl_yeu_cau: it.sl_thuc_nhap, sl_thuc_xuat: it.sl_thuc_nhap, don_gia: it.don_gia,
+    })
+  );
+  if (!dsVatTu.length) await taiDanhSachVatTuChoXuat();
+  veBangDongXuat();
+  capNhatTongXuat();
+});
+
+// ===== TÁCH PHIẾU NHẬP THÀNH NHIỀU PHIẾU XUẤT =====
+let txKieu = 'chia-doi';
+document.querySelectorAll('#tx-kieu-seg button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    txKieu = btn.dataset.kieu;
+    document.querySelectorAll('#tx-kieu-seg button').forEach((b) => b.classList.toggle('on', b === btn));
+    document.getElementById('tx-vung-chia-doi').style.display = txKieu === 'chia-doi' ? 'grid' : 'none';
+    document.getElementById('tx-vung-tung-mat-hang').style.display = txKieu === 'tung-mat-hang' ? 'grid' : 'none';
+  });
+});
+
+document.getElementById('tx-phieu-nhap').addEventListener('change', async (e) => {
+  const id = e.target.value;
+  const xemTruoc = document.getElementById('tx-xem-truoc');
+  if (!id) { xemTruoc.innerHTML = ''; return; }
+  const phieu = await goiApi('/api/phieu-nhap/' + id);
+  document.getElementById('tx-ly-do').value = `Xuất theo phiếu nhập ${phieu.so_phieu || '#' + phieu.id}`;
+  xemTruoc.innerHTML = `
+    <table class="ui-table">
+      <thead><tr><th>Tên hàng</th><th>ĐVT</th><th class="num">SL đã nhập</th></tr></thead>
+      <tbody>${(phieu.items || []).map((it) => `<tr><td>${it.ten_hang}</td><td>${it.dvt || ''}</td><td class="num">${formatSo(it.sl_thuc_nhap)}</td></tr>`).join('')}</tbody>
+    </table>`;
+});
+
+document.getElementById('tx-tao-phieu').addEventListener('click', async () => {
+  const loiEl = document.getElementById('tx-loi');
+  const ketQuaEl = document.getElementById('tx-ket-qua');
+  hienLoi(loiEl, '');
+  ketQuaEl.style.display = 'none';
+
+  const phieuNhapId = document.getElementById('tx-phieu-nhap').value;
+  if (!phieuNhapId) { hienLoi(loiEl, 'Chưa chọn phiếu nhập cần tách.'); return; }
+
+  const chung = {
+    phieu_nhap_id: Number(phieuNhapId),
+    kieu: txKieu,
+    ngay: document.getElementById('tx-ngay').value,
+    co_tk: document.getElementById('tx-co-tk').value.trim(),
+    thue_suat: Number(document.getElementById('tx-thue-suat').value) || 0,
+    ly_do_xuat: document.getElementById('tx-ly-do').value.trim(),
+    xuat_tai_kho: document.getElementById('tx-xuat-tai-kho').value.trim(),
+    dia_diem: document.getElementById('tx-dia-diem').value.trim(),
+  };
+
+  if (txKieu === 'chia-doi') {
+    chung.donViA = {
+      nguoi_nhan: document.getElementById('tx-a-nguoi-nhan').value.trim(),
+      don_vi: document.getElementById('tx-a-don-vi').value.trim(),
+      so_phieu: document.getElementById('tx-a-so-phieu').value.trim(),
+    };
+    chung.donViB = {
+      nguoi_nhan: document.getElementById('tx-b-nguoi-nhan').value.trim(),
+      don_vi: document.getElementById('tx-b-don-vi').value.trim(),
+      so_phieu: document.getElementById('tx-b-so-phieu').value.trim(),
+    };
+  } else {
+    chung.donVi = {
+      nguoi_nhan: document.getElementById('tx-m-nguoi-nhan').value.trim(),
+      don_vi: document.getElementById('tx-m-don-vi').value.trim(),
+      so_phieu_goc: document.getElementById('tx-m-so-phieu-goc').value.trim(),
+    };
+  }
+
+  try {
+    const kq = await goiApi('/api/phieu-xuat/tach-tu-nhap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(chung),
+    });
+    let html = `<i class="fas fa-circle-check"></i><span>Đã tạo ${kq.so_phieu_da_tao} phiếu xuất.</span>`;
+    if (kq.canh_bao && kq.canh_bao.length) {
+      html += '<br>' + kq.canh_bao.map((w) => `⚠️ ${w}`).join('<br>');
+    }
+    ketQuaEl.innerHTML = html;
+    ketQuaEl.style.display = 'flex';
+    document.getElementById('tx-xem-truoc').innerHTML = '';
+    document.getElementById('tx-phieu-nhap').value = '';
   } catch (err) {
     if (err.data && err.data.chi_tiet) {
       hienLoi(loiEl, 'Không đủ tồn kho:<br>' + err.data.chi_tiet

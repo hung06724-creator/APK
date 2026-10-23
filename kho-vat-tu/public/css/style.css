@@ -137,6 +137,12 @@ textarea.ui-input { height: auto; padding: 10px 12px; resize: vertical; min-heig
 .ui-form-grid .span-2 { grid-column: span 2; }
 @media (max-width: 768px) { .ui-form-grid { grid-template-columns: 1fr; } }
 
+/* ===== Thanh chọn viên thuốc ===== */
+.ui-seg { display: flex; flex-wrap: wrap; gap: 2px; border: 1px solid var(--border); border-radius: 9999px; background: var(--card-bg); padding: 3px; width: fit-content; }
+.ui-seg button { border: 0; background: transparent; cursor: pointer; border-radius: 9999px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 500; color: var(--text-muted); transition: background-color .16s ease, color .16s ease; }
+.ui-seg button:hover:not(.on) { background: var(--btn-neutral-hover); color: var(--text-main); }
+.ui-seg button.on { background: var(--primary); color: var(--btn-primary-text); }
+
 /* ===== Nhãn ===== */
 .ui-pill { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; white-space: nowrap; }
 .ui-tone-primary { background: var(--btn-secondary-bg); color: var(--btn-secondary-text); }
