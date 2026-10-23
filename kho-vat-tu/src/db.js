@@ -95,6 +95,11 @@ CREATE TABLE IF NOT EXISTS phieu_xuat_items (
 );
 CREATE INDEX IF NOT EXISTS idx_pxi_phieu ON phieu_xuat_items(phieu_xuat_id);
 CREATE INDEX IF NOT EXISTS idx_pxi_vattu ON phieu_xuat_items(vat_tu_id);
+
+CREATE TABLE IF NOT EXISTS cau_hinh (
+  khoa TEXT PRIMARY KEY,
+  gia_tri TEXT
+);
 `);
 
 // Thêm cột mới cho database cũ đã tạo từ trước (CREATE TABLE IF NOT EXISTS không tự
@@ -159,4 +164,35 @@ function tonKhoCuaVatTu(vatTuId) {
   return row.ton_kho || 0;
 }
 
-module.exports = { db, findOrCreateVatTu, tonKhoTatCa, tonKhoCuaVatTu };
+// Cấu hình các trường hiển thị trên mẫu phiếu Excel (tên đơn vị, bộ phận, người ký...).
+// Lưu kiểu khóa-giá trị để dễ thêm trường mới sau này mà không cần đổi schema.
+const CAU_HINH_MAC_DINH = {
+  ten_don_vi: 'Trường cao đẳng nghề công nghiệp Hà Nội',
+  bo_phan: 'Phòng Kế hoạch- Tài chính',
+  ghi_chu_thong_tu: '( Kèm theo Thông tư số 99/2025/TT-BTC',
+  ghi_chu_thong_tu_2: 'ngày 27 tháng 10 năm 2025 của Bộ trưởng Bộ Tài chính',
+  nguoi_ky_nhap: 'Người lập phiếu, Người giao hàng, Thủ kho, Kế toán trưởng',
+  nguoi_ky_xuat: 'Người lập phiếu, Người nhận hàng, Thủ kho, Kế toán trưởng, P. Hiệu trưởng',
+};
+
+function layCauHinh() {
+  const rows = db.prepare('SELECT khoa, gia_tri FROM cau_hinh').all();
+  const luu = {};
+  rows.forEach((r) => { luu[r.khoa] = r.gia_tri; });
+  return { ...CAU_HINH_MAC_DINH, ...luu };
+}
+
+function luuCauHinh(doiTuong) {
+  const upsert = db.prepare(
+    'INSERT INTO cau_hinh (khoa, gia_tri) VALUES (@khoa, @gia_tri) ON CONFLICT(khoa) DO UPDATE SET gia_tri = @gia_tri'
+  );
+  const tx = db.transaction(() => {
+    Object.keys(CAU_HINH_MAC_DINH).forEach((khoa) => {
+      if (doiTuong[khoa] !== undefined) upsert.run({ khoa, gia_tri: String(doiTuong[khoa]) });
+    });
+  });
+  tx();
+  return layCauHinh();
+}
+
+module.exports = { db, findOrCreateVatTu, tonKhoTatCa, tonKhoCuaVatTu, layCauHinh, luuCauHinh, CAU_HINH_MAC_DINH };

@@ -22,6 +22,7 @@
       <div class="nav-item" data-tab="tao-nhap"><span class="icon"><i class="fas fa-file-circle-plus"></i></span>+ Phiếu nhập mới</div>
       <div class="nav-item" data-tab="tao-xuat"><span class="icon"><i class="fas fa-file-export"></i></span>+ Phiếu xuất mới</div>
       <div class="nav-item" data-tab="tach-xuat"><span class="icon"><i class="fas fa-code-fork"></i></span>Tách phiếu xuất</div>
+      <div class="nav-item" data-tab="cau-hinh"><span class="icon"><i class="fas fa-gear"></i></span>Cấu hình mẫu phiếu</div>
     </div>
   </nav>
 
@@ -214,7 +215,7 @@
       <div class="ui-head">
         <div>
           <h1>Tách phiếu nhập thành nhiều phiếu xuất</h1>
-          <p>Chọn 1 phiếu nhập, hệ thống tự tạo sẵn nhiều phiếu xuất cùng lúc — bấm 1 nút là xong.</p>
+          <p>Chọn 1 phiếu nhập, tự thêm bao nhiêu nhóm (phiếu xuất) tùy ý, rồi gõ số lượng muốn chia cho từng mặt hàng vào từng nhóm — chia đôi, chia ba, hay gộp nhiều mặt hàng vào 1 phiếu đều được.</p>
         </div>
       </div>
 
@@ -224,43 +225,7 @@
             Chọn phiếu nhập cần tách
             <select id="tx-phieu-nhap" class="ui-input"><option value="">— Chọn phiếu nhập —</option></select>
           </div>
-
-          <div class="ui-field">
-            Cách tách
-            <div class="ui-seg" id="tx-kieu-seg">
-              <button type="button" data-kieu="chia-doi" class="on">Chia đôi cho 2 đơn vị</button>
-              <button type="button" data-kieu="tung-mat-hang">Tách riêng từng mặt hàng</button>
-            </div>
-          </div>
-
-          <!-- Chia đôi: 2 bộ đơn vị nhận -->
-          <div id="tx-vung-chia-doi" class="ui-form-grid cot-2">
-            <div class="ui-card">
-              <div class="ui-card-head"><h2>Phiếu xuất A (nửa 1)</h2></div>
-              <div class="ui-card-body">
-                <div class="ui-field">Người nhận<input id="tx-a-nguoi-nhan" class="ui-input" /></div>
-                <div class="ui-field">Đơn vị<input id="tx-a-don-vi" class="ui-input" /></div>
-                <div class="ui-field">Số phiếu<input id="tx-a-so-phieu" class="ui-input" placeholder="PX 01" /></div>
-              </div>
-            </div>
-            <div class="ui-card">
-              <div class="ui-card-head"><h2>Phiếu xuất B (nửa 2)</h2></div>
-              <div class="ui-card-body">
-                <div class="ui-field">Người nhận<input id="tx-b-nguoi-nhan" class="ui-input" /></div>
-                <div class="ui-field">Đơn vị<input id="tx-b-don-vi" class="ui-input" /></div>
-                <div class="ui-field">Số phiếu<input id="tx-b-so-phieu" class="ui-input" placeholder="PX 02" /></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Tách riêng từng mặt hàng: 1 bộ đơn vị dùng chung cho mọi phiếu -->
-          <div id="tx-vung-tung-mat-hang" class="ui-form-grid cot-2" style="display:none">
-            <div class="ui-field">Người nhận (áp dụng cho tất cả)<input id="tx-m-nguoi-nhan" class="ui-input" /></div>
-            <div class="ui-field">Đơn vị (áp dụng cho tất cả)<input id="tx-m-don-vi" class="ui-input" /></div>
-            <div class="ui-field span-2">Tiền tố số phiếu (tùy chọn, vd "PX 05" → PX 05-1, PX 05-2...)<input id="tx-m-so-phieu-goc" class="ui-input" placeholder="PX 05" /></div>
-          </div>
-
-          <div class="ui-form-grid" style="margin-top:8px">
+          <div class="ui-form-grid">
             <div class="ui-field">Ngày xuất<input id="tx-ngay" class="ui-input" type="date" /></div>
             <div class="ui-field">Có TK<input id="tx-co-tk" class="ui-input" placeholder="156" /></div>
             <div class="ui-field">Thuế suất (%)<input id="tx-thue-suat" class="ui-input" type="number" value="0" /></div>
@@ -268,13 +233,54 @@
             <div class="ui-field">Xuất tại kho<input id="tx-xuat-tai-kho" class="ui-input" /></div>
             <div class="ui-field">Địa điểm<input id="tx-dia-diem" class="ui-input" /></div>
           </div>
+        </div>
+      </div>
 
-          <div id="tx-xem-truoc"></div>
-          <div id="tx-loi" class="ui-note danger" style="display:none"></div>
-          <div id="tx-ket-qua" class="ui-note" style="display:none"></div>
-          <div style="text-align:right">
-            <button class="btn btn-primary" id="tx-tao-phieu"><i class="fas fa-code-fork"></i> Tạo phiếu xuất</button>
+      <div class="ui-card">
+        <div class="ui-card-head">
+          <h2>Các nhóm (mỗi nhóm = 1 phiếu xuất sẽ tạo)</h2>
+          <div class="ui-head-actions">
+            <button class="btn btn-neutral btn-sm" id="tx-chia-deu" type="button"><i class="fas fa-scale-balanced"></i> Chia đều cho các nhóm</button>
+            <button class="btn btn-neutral btn-sm" id="tx-them-nhom" type="button"><i class="fas fa-plus"></i> Thêm nhóm</button>
           </div>
+        </div>
+        <div class="ui-card-body">
+          <div id="tx-nhom-list" style="display:flex; flex-direction:column; gap:10px"></div>
+        </div>
+      </div>
+
+      <div class="ui-card">
+        <div class="ui-card-head"><h2>Bảng phân bổ số lượng</h2></div>
+        <div class="ui-card-body">
+          <div class="ui-table-scroll"><table class="ui-table" id="tx-bang-phan-bo"></table></div>
+        </div>
+      </div>
+
+      <div id="tx-loi" class="ui-note danger" style="display:none"></div>
+      <div id="tx-ket-qua" class="ui-note" style="display:none"></div>
+      <div style="text-align:right">
+        <button class="btn btn-primary" id="tx-tao-phieu"><i class="fas fa-code-fork"></i> Tạo phiếu xuất</button>
+      </div>
+    </section>
+
+    <!-- CẤU HÌNH MẪU PHIẾU EXCEL -->
+    <section id="cau-hinh" class="page">
+      <div class="ui-head">
+        <div>
+          <h1>Cấu hình mẫu phiếu Excel</h1>
+          <p>Các trường này áp dụng cho mọi phiếu nhập/xuất khi xuất ra Excel. Tên người, danh sách người ký cách nhau bằng dấu phẩy.</p>
+        </div>
+      </div>
+      <div class="ui-card">
+        <div class="ui-card-body">
+          <div class="ui-field">Tên đơn vị (dòng đầu phiếu)<input id="ch-ten-don-vi" class="ui-input" /></div>
+          <div class="ui-field">Bộ phận<input id="ch-bo-phan" class="ui-input" /></div>
+          <div class="ui-field">Dòng "Kèm theo Thông tư..." (dòng 1)<input id="ch-ghi-chu-tt" class="ui-input" /></div>
+          <div class="ui-field">Dòng "Kèm theo Thông tư..." (dòng 2)<input id="ch-ghi-chu-tt-2" class="ui-input" /></div>
+          <div class="ui-field">Người ký — Phiếu nhập kho (cách nhau bằng dấu phẩy)<input id="ch-nguoi-ky-nhap" class="ui-input" placeholder="Người lập phiếu, Người giao hàng, Thủ kho, Kế toán trưởng" /></div>
+          <div class="ui-field">Người ký — Phiếu xuất kho (cách nhau bằng dấu phẩy)<input id="ch-nguoi-ky-xuat" class="ui-input" placeholder="Người lập phiếu, Người nhận hàng, Thủ kho, Kế toán trưởng" /></div>
+          <div id="ch-ket-qua" class="ui-note" style="display:none"></div>
+          <div style="text-align:right"><button class="btn btn-primary" id="ch-luu"><i class="fas fa-floppy-disk"></i> Lưu cấu hình</button></div>
         </div>
       </div>
     </section>

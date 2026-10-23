@@ -4,11 +4,6 @@
 // mẫu gốc (không phải tự ước lượng) để khi in ra giống hệt phiếu giấy đang dùng.
 const ExcelJS = require('exceljs');
 
-const TEN_DON_VI = 'Trường cao đẳng nghề công nghiệp Hà Nội';
-const BO_PHAN = 'Phòng Kế hoạch- Tài chính';
-const GHI_CHU_TT = '( Kèm theo Thông tư số 99/2025/TT-BTC';
-const GHI_CHU_TT_2 = 'ngày 27 tháng 10 năm 2025 của Bộ trưởng Bộ Tài chính';
-
 const NUMFMT_INT = '_(* #,##0_);_(* (#,##0);_(* "-"??_);_(@_)';
 const NUMFMT_GIA = '#,##0.00';
 const NUMFMT_TIEN = '#,##0';
@@ -30,7 +25,7 @@ const KIEU = {
   ngay: { font: fontThuong({ italic: true, size: 12 }), alignment: { horizontal: 'center' } },
   soPhieuGoc: { font: fontThuong({ bold: true, size: 10 }) },
   noCo: { font: fontThuong({ bold: true, size: 10 }), alignment: { horizontal: 'left' } },
-  nguoiNhap: { font: fontThuong(), alignment: { vertical: 'middle' } },
+  nguoiNhap: { font: fontThuong(), alignment: { vertical: 'middle', wrapText: true } },
   lyDoNhap: { font: fontThuong(), alignment: { horizontal: 'center', vertical: 'middle', wrapText: true } },
   lyDoXuat: { font: fontThuong(), alignment: { horizontal: 'left', vertical: 'middle', wrapText: true } },
   noiKho: { font: fontThuong(), alignment: { horizontal: 'left', vertical: 'top', wrapText: true } },
@@ -55,7 +50,7 @@ function oDongHang(cot, viTri) {
   const font = fontThuong({ size: 10 });
   switch (cot) {
     case 1: return { font, alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }, border: vien };
-    case 2: return { font, alignment: { horizontal: 'left', vertical: 'middle' }, border: vien };
+    case 2: return { font, alignment: { horizontal: 'left', vertical: 'middle', wrapText: true }, border: vien };
     case 3: return { font, alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }, border: vien };
     case 4: return { font, alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }, border: vien };
     case 5: case 6: return { font, alignment: { horizontal: 'center', vertical: 'middle' }, border: vien, numFmt: NUMFMT_INT };
@@ -73,10 +68,19 @@ function dongTongVal() {
   return { font: fontDen(), alignment: { horizontal: 'center', vertical: 'middle' }, border: vienBox, numFmt: NUMFMT_INT };
 }
 
-const NHAN_KY_NHAP = ' Người lập phiếu                         Người giao hàng                               Thủ kho                             Kế toán trưởng';
-const KY_HO_TEN_NHAP = '( Ký , họ tên)                                ( Ký , họ tên)                           ( Ký , họ tên)                             ( Ký , họ tên)                    ';
-const NHAN_KY_XUAT = ' Người lập phiếu     Người nhận hàng              Thủ kho                Kế toán trưởng                     P. Hiệu trưởng ';
-const KY_HO_TEN_XUAT = '( Ký , họ tên)         ( Ký , họ tên)                ( Ký , họ tên)                ( Ký , họ tên)                         ( Ký , họ tên)      ';
+// Danh sách người ký (lấy từ cấu hình, phân tách bằng dấu phẩy) → ghép thành 1 dòng
+// có khoảng cách đều nhau, và 1 dòng "(Ký, họ tên)" lặp lại tương ứng.
+function dongNhanKy(nguoiKyCsv) {
+  const ds = String(nguoiKyCsv || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const KHOANG_CACH = '          ';
+  return {
+    nhan: '  ' + ds.join(KHOANG_CACH),
+    kyHoTen: '  ' + ds.map(() => '( Ký , họ tên)').join(KHOANG_CACH),
+  };
+}
 
 function datO(ws, diaChi, giaTri, kieu) {
   const cell = ws.getCell(diaChi);
@@ -85,8 +89,26 @@ function datO(ws, diaChi, giaTri, kieu) {
   return cell;
 }
 
-function taoFilePhieu(phieu, items, loai) {
+// Ước lượng số dòng chữ sẽ xuống (wrap) để tính chiều cao dòng đủ hiển thị hết chữ —
+// nếu không tính, Excel giữ chiều cao mặc định (~15) và chữ dài bị CẮT/CHE mất phần
+// dưới dù đã bật "wrap text". soKyTuMotDong ước theo độ rộng cột đang dùng.
+function chieuCaoChoDong(text, soKyTuMotDong, caoToiThieu = 15) {
+  const doDai = (text || '').length;
+  const soDong = Math.max(1, Math.ceil(doDai / soKyTuMotDong));
+  return Math.max(caoToiThieu, soDong * 14 + 6);
+}
+
+function taoFilePhieu(phieu, items, loai, cauHinh = {}) {
   const laNhap = loai === 'nhap';
+  const ch = {
+    ten_don_vi: 'Trường cao đẳng nghề công nghiệp Hà Nội',
+    bo_phan: 'Phòng Kế hoạch- Tài chính',
+    ghi_chu_thong_tu: '( Kèm theo Thông tư số 99/2025/TT-BTC',
+    ghi_chu_thong_tu_2: 'ngày 27 tháng 10 năm 2025 của Bộ trưởng Bộ Tài chính',
+    nguoi_ky_nhap: 'Người lập phiếu, Người giao hàng, Thủ kho, Kế toán trưởng',
+    nguoi_ky_xuat: 'Người lập phiếu, Người nhận hàng, Thủ kho, Kế toán trưởng, P. Hiệu trưởng',
+    ...cauHinh,
+  };
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(laNhap ? 'Phiếu nhập kho' : 'Phiếu xuất kho', {
     pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1 },
@@ -98,11 +120,11 @@ function taoFilePhieu(phieu, items, loai) {
   ws.columns = doRong.map((width) => ({ width }));
 
   // ---- Khối đầu phiếu ----
-  ws.mergeCells('A1:D1'); datO(ws, 'A1', `Đơn vị: ${TEN_DON_VI}`, KIEU.donVi);
+  ws.mergeCells('A1:D1'); datO(ws, 'A1', `Đơn vị: ${ch.ten_don_vi}`, KIEU.donVi);
   ws.mergeCells('E1:I1'); datO(ws, 'E1', laNhap ? 'Mẫu số 01-VT' : 'Mẫu số 02-VT', KIEU.mauSo);
-  ws.mergeCells('A2:D2'); datO(ws, 'A2', `Bộ phận: ${BO_PHAN}`, KIEU.donVi);
-  ws.mergeCells('E2:I2'); datO(ws, 'E2', GHI_CHU_TT, KIEU.kemTheo);
-  ws.mergeCells('E3:I3'); datO(ws, 'E3', GHI_CHU_TT_2, KIEU.kemTheo);
+  ws.mergeCells('A2:D2'); datO(ws, 'A2', `Bộ phận: ${ch.bo_phan}`, KIEU.donVi);
+  ws.mergeCells('E2:I2'); datO(ws, 'E2', ch.ghi_chu_thong_tu, KIEU.kemTheo);
+  ws.mergeCells('E3:I3'); datO(ws, 'E3', ch.ghi_chu_thong_tu_2, KIEU.kemTheo);
   ws.mergeCells('A4:I4'); datO(ws, 'A4', laNhap ? 'PHIẾU NHẬP KHO' : 'PHIẾU XUẤT KHO', KIEU.tieuDe);
   ws.mergeCells('A5:I5'); datO(ws, 'A5', dinhDangNgay(phieu.ngay), KIEU.ngay);
   datO(ws, 'G6', `Số: ${phieu.so_phieu || ''}`, KIEU.soPhieuGoc);
@@ -110,23 +132,29 @@ function taoFilePhieu(phieu, items, loai) {
   datO(ws, 'G8', `Có : ${phieu.co_tk || ''}`, KIEU.noCo);
 
   const tenNguoi = laNhap ? phieu.nguoi_nhap || '' : phieu.nguoi_nhan || '';
-  datO(ws, 'A9', `Họ và tên người nhập: ${tenNguoi}            Đơn vị : ${phieu.don_vi || ''}`, KIEU.nguoiNhap);
+  const dongNguoiNhap = `Họ và tên người nhập: ${tenNguoi}            Đơn vị : ${phieu.don_vi || ''}`;
+  ws.mergeCells('A9:I9'); // gộp ô (thay vì để tràn qua ô trống bên cạnh) để tên dài không bị che
+  datO(ws, 'A9', dongNguoiNhap, KIEU.nguoiNhap);
+  ws.getRow(9).height = chieuCaoChoDong(dongNguoiNhap, 95);
 
   ws.mergeCells('A10:I10');
-  datO(
-    ws, 'A10',
-    laNhap ? phieu.ly_do_nhap || '' : `Lý do xuất kho : ${phieu.ly_do_xuat || ''}`,
-    laNhap ? KIEU.lyDoNhap : KIEU.lyDoXuat
-  );
+  const dongLyDo = laNhap ? phieu.ly_do_nhap || '' : `Lý do xuất kho : ${phieu.ly_do_xuat || ''}`;
+  datO(ws, 'A10', dongLyDo, laNhap ? KIEU.lyDoNhap : KIEU.lyDoXuat);
+  ws.getRow(10).height = chieuCaoChoDong(dongLyDo, 95);
 
   ws.mergeCells('A11:F11');
-  datO(ws, 'A11', laNhap ? `Nhập tại kho: ${phieu.nhap_tai_kho || ''}` : `Xuất tại kho: ${phieu.xuat_tai_kho || ''}`, KIEU.noiKho);
+  const dongNoiKho = laNhap ? `Nhập tại kho: ${phieu.nhap_tai_kho || ''}` : `Xuất tại kho: ${phieu.xuat_tai_kho || ''}`;
+  datO(ws, 'A11', dongNoiKho, KIEU.noiKho);
   ws.mergeCells('G11:H11');
   datO(ws, 'G11', `Địa điểm ${phieu.dia_diem || ''}`, KIEU.diaDiem);
+  ws.getRow(11).height = chieuCaoChoDong(dongNoiKho, 55);
 
   // ---- Tiêu đề bảng hàng hóa ----
   ws.mergeCells('A12:A13'); ws.mergeCells('B12:B13'); ws.mergeCells('C12:C13'); ws.mergeCells('D12:D13');
   ws.mergeCells('E12:F12'); ws.mergeCells('G12:G13'); ws.mergeCells('H12:H13'); ws.mergeCells('I12:I13');
+  ws.getRow(12).height = 15;
+  ws.getRow(13).height = 37.5; // chừa đủ chỗ cho tiêu đề cột dài "Tên, nhãn hiệu, quy cách..." xuống dòng
+  ws.getRow(14).height = 15;
   datO(ws, 'A12', 'STT', KIEU.thTieuDe);
   datO(ws, 'B12', 'Tên, nhãn hiệu, quy cách, phẩm chất vật tư, dụng cụ, sp, hàng hoá', KIEU.thTieuDe);
   datO(ws, 'C12', 'Mã số', KIEU.thTieuDe);
@@ -153,6 +181,7 @@ function taoFilePhieu(phieu, items, loai) {
     datO(ws, `G${r}`, it.don_gia, oDongHang(7, viTri));
     datO(ws, `H${r}`, it.thanh_tien, oDongHang(8, viTri));
     datO(ws, `I${r}`, it.ghi_chu || '', oDongHang(9, viTri));
+    ws.getRow(r).height = chieuCaoChoDong(it.ten_hang, 26, 15.75); // 15.75 = cao 1 dòng mặc định của mẫu gốc
     r++;
   });
 
@@ -168,17 +197,23 @@ function taoFilePhieu(phieu, items, loai) {
   r++;
 
   ws.mergeCells(`A${r}:I${r}`);
-  datO(ws, `A${r}`, `Tổng số tiền (viết bằng chữ) : ${phieu.tong_bang_chu || ''}./.`, KIEU.bangChu);
+  const dongBangChu = `Tổng số tiền (viết bằng chữ) : ${phieu.tong_bang_chu || ''}./.`;
+  datO(ws, `A${r}`, dongBangChu, KIEU.bangChu);
+  ws.getRow(r).height = chieuCaoChoDong(dongBangChu, 110);
   r++;
   ws.mergeCells(`A${r}:I${r}`);
-  datO(ws, `A${r}`, `Số chứng từ gốc kèm theo : ${phieu.so_chung_tu_goc || ''}`, KIEU.chungTuGoc);
+  const dongChungTu = `Số chứng từ gốc kèm theo : ${phieu.so_chung_tu_goc || ''}`;
+  datO(ws, `A${r}`, dongChungTu, KIEU.chungTuGoc);
+  ws.getRow(r).height = chieuCaoChoDong(dongChungTu, 110);
   r++; // dòng nhãn chữ ký nằm ngay sau, không có dòng trống (đúng theo mẫu gốc)
 
+  const { nhan, kyHoTen } = dongNhanKy(laNhap ? ch.nguoi_ky_nhap : ch.nguoi_ky_xuat);
   ws.mergeCells(`A${r}:I${r}`);
-  datO(ws, `A${r}`, laNhap ? NHAN_KY_NHAP : NHAN_KY_XUAT, KIEU.nhanKy);
+  datO(ws, `A${r}`, nhan, KIEU.nhanKy);
   r++;
   ws.mergeCells(`A${r}:I${r}`);
-  datO(ws, `A${r}`, laNhap ? KY_HO_TEN_NHAP : KY_HO_TEN_XUAT, { font: fontThuong({ italic: true }), alignment: { horizontal: 'center' } });
+  datO(ws, `A${r}`, kyHoTen, { font: fontThuong({ italic: true }), alignment: { horizontal: 'center' } });
+  ws.getRow(r).height = 50; // chừa chỗ ký tay bên dưới dòng "(Ký, họ tên)"
 
   return wb;
 }

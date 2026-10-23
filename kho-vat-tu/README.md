@@ -19,10 +19,13 @@ Website chạy trên máy cá nhân (localhost), giúp:
 - Upload hóa đơn PDF → tự động trích xuất → tạo **phiếu nhập kho**.
 - Tạo **phiếu xuất kho**, tự kiểm tra không cho xuất vượt tồn.
 - Tạo phiếu xuất **lấy sẵn toàn bộ dòng hàng từ 1 phiếu nhập có sẵn**.
-- **Tách 1 phiếu nhập thành nhiều phiếu xuất** cùng lúc: chia đôi cho 2 đơn vị, hoặc
-  tách riêng từng mặt hàng thành từng phiếu xuất khác nhau.
+- **Tách 1 phiếu nhập thành nhiều phiếu xuất** bằng bảng phân bổ linh hoạt: tự thêm
+  bao nhiêu nhóm (phiếu xuất) tùy ý — chia đôi, chia ba, chia năm, hoặc gộp nhiều mặt
+  hàng vào cùng 1 phiếu — tự gõ số lượng cho từng mặt hàng vào từng nhóm.
 - Theo dõi **tồn kho** từng vật tư (tồn = tổng nhập − tổng xuất).
 - Nạp dữ liệu lịch sử từ file Excel phiếu nhập/xuất mẫu cũ.
+- **Cấu hình mẫu phiếu Excel**: tự đổi tên đơn vị, bộ phận, danh sách người ký cho
+  phiếu nhập/xuất — không cần sửa code.
 
 ## Cài đặt & chạy
 

@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, findOrCreateVatTu, tonKhoCuaVatTu } = require('../db');
+const { db, findOrCreateVatTu, tonKhoCuaVatTu, layCauHinh } = require('../db');
 const { soTienBangChu } = require('../services/soTienBangChu');
 const { taoFilePhieu } = require('../services/xuatMauPhieu');
 
@@ -26,7 +26,7 @@ router.get('/:id/xuat-excel', async (req, res) => {
   const phieu = db.prepare('SELECT * FROM phieu_xuat WHERE id = ?').get(req.params.id);
   if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu xuất' });
   const items = db.prepare('SELECT * FROM phieu_xuat_items WHERE phieu_xuat_id = ? ORDER BY stt').all(req.params.id);
-  const wb = taoFilePhieu(phieu, items, 'xuat');
+  const wb = taoFilePhieu(phieu, items, 'xuat', layCauHinh());
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="PhieuXuatKho_${phieu.so_phieu || phieu.id}.xlsx"`);
   await wb.xlsx.write(res);
@@ -138,19 +138,25 @@ router.post('/', (req, res) => {
   }
 });
 
-// Tách 1 phiếu nhập kho thành nhiều phiếu xuất cùng lúc.
+// Tách 1 phiếu nhập kho thành NHIỀU phiếu xuất tùy ý — bảng phân bổ linh hoạt: bao
+// nhiêu nhóm (phiếu xuất) cũng được, mỗi dòng hàng tự gõ số lượng chia cho từng nhóm
+// (gộp nhiều mặt hàng vào 1 phiếu, chia đều 2/3/4/5 nhóm, hay bất kỳ cách chia nào).
 // body: {
-//   phieu_nhap_id, kieu: 'chia-doi' | 'tung-mat-hang',
-//   ngay, no_tk, co_tk, ly_do_xuat, xuat_tai_kho, dia_diem, thue_suat,  // áp dụng chung
-//   donViA, donViB: { nguoi_nhan, don_vi, so_phieu }   // dùng khi kieu = 'chia-doi'
-//   donVi: { nguoi_nhan, don_vi, so_phieu_goc }        // dùng khi kieu = 'tung-mat-hang'
+//   phieu_nhap_id,
+//   nhom: [ { nguoi_nhan, don_vi, so_phieu }, ... ],   // mỗi phần tử = 1 phiếu xuất sẽ tạo
+//   phan_bo: { [phieu_nhap_item_id]: [slNhom0, slNhom1, ...] },  // số lượng chia cho từng nhóm, theo đúng thứ tự "nhom" ở trên
+//   ngay, no_tk, co_tk, ly_do_xuat, xuat_tai_kho, dia_diem, thue_suat   // áp dụng chung cho mọi phiếu tạo ra
 // }
-router.post('/tach-tu-nhap', (req, res) => {
+router.post('/phan-bo', (req, res) => {
   const b = req.body || {};
   const phieuNhap = db.prepare('SELECT * FROM phieu_nhap WHERE id = ?').get(b.phieu_nhap_id);
   if (!phieuNhap) return res.status(404).json({ error: 'Không tìm thấy phiếu nhập' });
   const itemsNhap = db.prepare('SELECT * FROM phieu_nhap_items WHERE phieu_nhap_id = ? ORDER BY stt').all(phieuNhap.id);
   if (itemsNhap.length === 0) return res.status(400).json({ error: 'Phiếu nhập này không có dòng hàng hóa nào' });
+
+  const nhom = Array.isArray(b.nhom) ? b.nhom : [];
+  if (nhom.length === 0) return res.status(400).json({ error: 'Cần ít nhất 1 nhóm (phiếu xuất) để phân bổ' });
+  const phanBo = b.phan_bo || {};
 
   const chung = {
     ngay: b.ngay || null,
@@ -163,53 +169,41 @@ router.post('/tach-tu-nhap', (req, res) => {
   };
 
   const canhBao = [];
-  let danhSachPhieu = [];
+  // Mỗi phần tử: danh sách dòng hàng của 1 phiếu xuất sẽ tạo (theo đúng thứ tự "nhom").
+  const dongHangTheoNhom = nhom.map(() => []);
 
-  const dongTu = (it, slXuat) => ({
-    vat_tu_id: it.vat_tu_id,
-    ten_hang: it.ten_hang,
-    ma_so: it.ma_so,
-    dvt: it.dvt,
-    sl_yeu_cau: slXuat,
-    sl_thuc_xuat: slXuat,
-    don_gia: it.don_gia,
-    thanh_tien: Math.round(slXuat * it.don_gia),
-    ghi_chu: it.ghi_chu,
-  });
-
-  if (b.kieu === 'chia-doi') {
-    const donViA = b.donViA || {};
-    const donViB = b.donViB || {};
-    const itemsA = [];
-    const itemsB = [];
-    itemsNhap.forEach((it) => {
-      const nuaA = Math.floor(it.sl_thuc_nhap / 2);
-      const nuaB = it.sl_thuc_nhap - nuaA;
-      if (it.sl_thuc_nhap % 2 !== 0) {
-        canhBao.push(`"${it.ten_hang}" số lượng lẻ (${it.sl_thuc_nhap}) — đã chia ${nuaA} / ${nuaB}, kiểm tra lại nếu cần chia khác.`);
+  for (const it of itemsNhap) {
+    const soLuongTheoNhom = (phanBo[it.id] || []).map((v) => Number(v) || 0);
+    const tongDaChia = soLuongTheoNhom.reduce((s, v) => s + v, 0);
+    if (tongDaChia > it.sl_thuc_nhap) {
+      canhBao.push(`"${it.ten_hang}": đã phân bổ ${tongDaChia} nhưng phiếu nhập chỉ có ${it.sl_thuc_nhap} — kiểm tra lại.`);
+    } else if (tongDaChia < it.sl_thuc_nhap && tongDaChia > 0) {
+      canhBao.push(`"${it.ten_hang}": chỉ phân bổ ${tongDaChia}/${it.sl_thuc_nhap}, còn dư ${it.sl_thuc_nhap - tongDaChia} chưa đưa vào phiếu xuất nào.`);
+    }
+    nhom.forEach((_, i) => {
+      const sl = soLuongTheoNhom[i] || 0;
+      if (sl > 0) {
+        dongHangTheoNhom[i].push({
+          vat_tu_id: it.vat_tu_id,
+          ten_hang: it.ten_hang,
+          ma_so: it.ma_so,
+          dvt: it.dvt,
+          sl_yeu_cau: sl,
+          sl_thuc_xuat: sl,
+          don_gia: it.don_gia,
+          thanh_tien: Math.round(sl * it.don_gia),
+          ghi_chu: it.ghi_chu,
+        });
       }
-      if (nuaA > 0) itemsA.push(dongTu(it, nuaA));
-      if (nuaB > 0) itemsB.push(dongTu(it, nuaB));
     });
-    if (itemsA.length > 0) danhSachPhieu.push({ ...chung, ...donViA, items: itemsA });
-    if (itemsB.length > 0) danhSachPhieu.push({ ...chung, ...donViB, items: itemsB });
-  } else if (b.kieu === 'tung-mat-hang') {
-    const donVi = b.donVi || {};
-    itemsNhap.forEach((it, idx) => {
-      danhSachPhieu.push({
-        ...chung,
-        nguoi_nhan: donVi.nguoi_nhan,
-        don_vi: donVi.don_vi,
-        so_phieu: donVi.so_phieu_goc ? `${donVi.so_phieu_goc}-${idx + 1}` : null,
-        items: [dongTu(it, it.sl_thuc_nhap)],
-      });
-    });
-  } else {
-    return res.status(400).json({ error: 'Kiểu tách không hợp lệ (cần "chia-doi" hoặc "tung-mat-hang")' });
   }
 
+  const danhSachPhieu = nhom
+    .map((n, i) => ({ ...chung, ...n, items: dongHangTheoNhom[i] }))
+    .filter((p) => p.items.length > 0);
+
   if (danhSachPhieu.length === 0) {
-    return res.status(400).json({ error: 'Không tạo được phiếu xuất nào từ lựa chọn này' });
+    return res.status(400).json({ error: 'Chưa phân bổ số lượng nào cho nhóm nào cả — hãy nhập số lượng vào bảng phân bổ.' });
   }
 
   const tatCaDongHang = danhSachPhieu.flatMap((p) => p.items);

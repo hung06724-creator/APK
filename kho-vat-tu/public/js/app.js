@@ -40,6 +40,7 @@ function chuyenTab(tab) {
     taiDanhSachPhieuNhapChoChon('px-chon-phieu-nhap');
   }
   if (tab === 'tach-xuat') taiDanhSachPhieuNhapChoChon('tx-phieu-nhap');
+  if (tab === 'cau-hinh') taiCauHinh();
 }
 
 // ===== TỒN KHO =====
@@ -466,28 +467,125 @@ document.getElementById('px-chon-phieu-nhap').addEventListener('change', async (
   capNhatTongXuat();
 });
 
-// ===== TÁCH PHIẾU NHẬP THÀNH NHIỀU PHIẾU XUẤT =====
-let txKieu = 'chia-doi';
-document.querySelectorAll('#tx-kieu-seg button').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    txKieu = btn.dataset.kieu;
-    document.querySelectorAll('#tx-kieu-seg button').forEach((b) => b.classList.toggle('on', b === btn));
-    document.getElementById('tx-vung-chia-doi').style.display = txKieu === 'chia-doi' ? 'grid' : 'none';
-    document.getElementById('tx-vung-tung-mat-hang').style.display = txKieu === 'tung-mat-hang' ? 'grid' : 'none';
+// ===== TÁCH PHIẾU NHẬP THÀNH NHIỀU PHIẾU XUẤT (bảng phân bổ linh hoạt) =====
+let txItems = []; // dòng hàng của phiếu nhập đang chọn: {id, ten_hang, dvt, sl_thuc_nhap}
+let txNhom = []; // mỗi phần tử = 1 phiếu xuất sẽ tạo: {nguoi_nhan, don_vi, so_phieu}
+let txPhanBo = {}; // { [itemId]: [slNhom0, slNhom1, ...] } — luôn đồng bộ độ dài với txNhom
+
+function txNhomMoi() {
+  return { nguoi_nhan: '', don_vi: '', so_phieu: '' };
+}
+
+function txDongBoDoDaiPhanBo() {
+  txItems.forEach((it) => {
+    const mang = txPhanBo[it.id] || [];
+    while (mang.length < txNhom.length) mang.push(0);
+    mang.length = txNhom.length;
+    txPhanBo[it.id] = mang;
   });
+}
+
+function veNhomList() {
+  const el = document.getElementById('tx-nhom-list');
+  if (txNhom.length === 0) {
+    el.innerHTML = '<div class="ui-empty"><i class="fas fa-users"></i>Chưa có nhóm nào. Bấm "Thêm nhóm" để bắt đầu.</div>';
+    return;
+  }
+  el.innerHTML = txNhom.map((n, i) => `
+    <div class="ui-form-grid cot-2" style="align-items:end; border:1px solid var(--border); border-radius:8px; padding:10px">
+      <div class="ui-field">Nhóm ${i + 1} — Người nhận<input class="ui-input" data-nhom="${i}" data-f="nguoi_nhan" value="${n.nguoi_nhan || ''}" /></div>
+      <div class="ui-field">Đơn vị<input class="ui-input" data-nhom="${i}" data-f="don_vi" value="${n.don_vi || ''}" /></div>
+      <div class="ui-field">Số phiếu<input class="ui-input" data-nhom="${i}" data-f="so_phieu" value="${n.so_phieu || ''}" placeholder="PX 0${i + 1}" /></div>
+      <div><button class="btn btn-ghost btn-sm" type="button" data-xoa-nhom="${i}"><i class="fas fa-trash"></i> Xóa nhóm</button></div>
+    </div>`).join('');
+  el.querySelectorAll('input').forEach((inp) =>
+    inp.addEventListener('input', (e) => {
+      txNhom[Number(e.target.dataset.nhom)][e.target.dataset.f] = e.target.value;
+    })
+  );
+  el.querySelectorAll('[data-xoa-nhom]').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      const i = Number(btn.dataset.xoaNhom);
+      txNhom.splice(i, 1);
+      txItems.forEach((it) => { if (txPhanBo[it.id]) txPhanBo[it.id].splice(i, 1); });
+      veNhomList();
+      veBangPhanBo();
+    })
+  );
+}
+
+function veBangPhanBo() {
+  const bang = document.getElementById('tx-bang-phan-bo');
+  if (txItems.length === 0) {
+    bang.innerHTML = '<tr><td><div class="ui-empty"><i class="fas fa-inbox"></i>Chọn phiếu nhập ở trên để hiện danh sách hàng hóa.</div></td></tr>';
+    return;
+  }
+  const dauNhom = txNhom.map((n, i) => `<th class="num">${n.so_phieu || 'Nhóm ' + (i + 1)}</th>`).join('');
+  const dong = txItems.map((it) => {
+    const phanBo = txPhanBo[it.id] || [];
+    const daChia = phanBo.reduce((s, v) => s + (Number(v) || 0), 0);
+    const con = it.sl_thuc_nhap - daChia;
+    const oNhom = txNhom.map((_, i) => `<td><input class="ui-input cell" type="number" min="0" data-item="${it.id}" data-nhom-idx="${i}" value="${phanBo[i] || 0}" /></td>`).join('');
+    return `<tr data-row-item="${it.id}">
+      <td>${it.ten_hang}</td><td>${it.dvt || ''}</td><td class="num">${formatSo(it.sl_thuc_nhap)}</td>
+      ${oNhom}
+      <td class="num" data-o-da-chia>${chuoiDaChia(daChia, con)}</td>
+    </tr>`;
+  }).join('');
+  bang.innerHTML = `
+    <thead><tr><th>Tên hàng</th><th>ĐVT</th><th class="num">SL đã nhập</th>${dauNhom}<th class="num">Đã phân bổ</th></tr></thead>
+    <tbody>${dong}</tbody>`;
+  bang.querySelectorAll('input').forEach((inp) =>
+    inp.addEventListener('input', (e) => {
+      const itemId = e.target.dataset.item;
+      const idx = Number(e.target.dataset.nhomIdx);
+      if (!txPhanBo[itemId]) txPhanBo[itemId] = txNhom.map(() => 0);
+      txPhanBo[itemId][idx] = Number(e.target.value) || 0;
+      // Chỉ cập nhật ô "Đã phân bổ" của đúng dòng đó, không vẽ lại cả bảng — tránh mất focus khi đang gõ.
+      const it = txItems.find((x) => String(x.id) === String(itemId));
+      const daChia = (txPhanBo[itemId] || []).reduce((s, v) => s + (Number(v) || 0), 0);
+      const tr = bang.querySelector(`tr[data-row-item="${itemId}"]`);
+      if (tr && it) tr.querySelector('[data-o-da-chia]').innerHTML = chuoiDaChia(daChia, it.sl_thuc_nhap - daChia);
+    })
+  );
+}
+
+function chuoiDaChia(daChia, con) {
+  return `${formatSo(daChia)}` + (con !== 0 ? ` <span style="color:var(--danger);font-weight:600">(còn ${formatSo(con)})</span>` : '');
+}
+
+document.getElementById('tx-them-nhom').addEventListener('click', () => {
+  txNhom.push(txNhomMoi());
+  txDongBoDoDaiPhanBo();
+  veNhomList();
+  veBangPhanBo();
+});
+
+document.getElementById('tx-chia-deu').addEventListener('click', () => {
+  if (txNhom.length === 0) { txNhom.push(txNhomMoi(), txNhomMoi()); veNhomList(); }
+  txDongBoDoDaiPhanBo();
+  const n = txNhom.length;
+  txItems.forEach((it) => {
+    const phan = Math.floor(it.sl_thuc_nhap / n);
+    let du = it.sl_thuc_nhap - phan * n;
+    txPhanBo[it.id] = txNhom.map(() => {
+      let sl = phan;
+      if (du > 0) { sl += 1; du -= 1; }
+      return sl;
+    });
+  });
+  veBangPhanBo();
 });
 
 document.getElementById('tx-phieu-nhap').addEventListener('change', async (e) => {
   const id = e.target.value;
-  const xemTruoc = document.getElementById('tx-xem-truoc');
-  if (!id) { xemTruoc.innerHTML = ''; return; }
+  if (!id) { txItems = []; veBangPhanBo(); return; }
   const phieu = await goiApi('/api/phieu-nhap/' + id);
   document.getElementById('tx-ly-do').value = `Xuất theo phiếu nhập ${phieu.so_phieu || '#' + phieu.id}`;
-  xemTruoc.innerHTML = `
-    <table class="ui-table">
-      <thead><tr><th>Tên hàng</th><th>ĐVT</th><th class="num">SL đã nhập</th></tr></thead>
-      <tbody>${(phieu.items || []).map((it) => `<tr><td>${it.ten_hang}</td><td>${it.dvt || ''}</td><td class="num">${formatSo(it.sl_thuc_nhap)}</td></tr>`).join('')}</tbody>
-    </table>`;
+  txItems = (phieu.items || []).map((it) => ({ id: it.id, ten_hang: it.ten_hang, dvt: it.dvt, sl_thuc_nhap: it.sl_thuc_nhap }));
+  txPhanBo = {};
+  txDongBoDoDaiPhanBo();
+  veBangPhanBo();
 });
 
 document.getElementById('tx-tao-phieu').addEventListener('click', async () => {
@@ -498,10 +596,12 @@ document.getElementById('tx-tao-phieu').addEventListener('click', async () => {
 
   const phieuNhapId = document.getElementById('tx-phieu-nhap').value;
   if (!phieuNhapId) { hienLoi(loiEl, 'Chưa chọn phiếu nhập cần tách.'); return; }
+  if (txNhom.length === 0) { hienLoi(loiEl, 'Chưa có nhóm (phiếu xuất) nào — bấm "Thêm nhóm".'); return; }
 
-  const chung = {
+  const body = {
     phieu_nhap_id: Number(phieuNhapId),
-    kieu: txKieu,
+    nhom: txNhom,
+    phan_bo: txPhanBo,
     ngay: document.getElementById('tx-ngay').value,
     co_tk: document.getElementById('tx-co-tk').value.trim(),
     thue_suat: Number(document.getElementById('tx-thue-suat').value) || 0,
@@ -510,30 +610,11 @@ document.getElementById('tx-tao-phieu').addEventListener('click', async () => {
     dia_diem: document.getElementById('tx-dia-diem').value.trim(),
   };
 
-  if (txKieu === 'chia-doi') {
-    chung.donViA = {
-      nguoi_nhan: document.getElementById('tx-a-nguoi-nhan').value.trim(),
-      don_vi: document.getElementById('tx-a-don-vi').value.trim(),
-      so_phieu: document.getElementById('tx-a-so-phieu').value.trim(),
-    };
-    chung.donViB = {
-      nguoi_nhan: document.getElementById('tx-b-nguoi-nhan').value.trim(),
-      don_vi: document.getElementById('tx-b-don-vi').value.trim(),
-      so_phieu: document.getElementById('tx-b-so-phieu').value.trim(),
-    };
-  } else {
-    chung.donVi = {
-      nguoi_nhan: document.getElementById('tx-m-nguoi-nhan').value.trim(),
-      don_vi: document.getElementById('tx-m-don-vi').value.trim(),
-      so_phieu_goc: document.getElementById('tx-m-so-phieu-goc').value.trim(),
-    };
-  }
-
   try {
-    const kq = await goiApi('/api/phieu-xuat/tach-tu-nhap', {
+    const kq = await goiApi('/api/phieu-xuat/phan-bo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(chung),
+      body: JSON.stringify(body),
     });
     let html = `<i class="fas fa-circle-check"></i><span>Đã tạo ${kq.so_phieu_da_tao} phiếu xuất.</span>`;
     if (kq.canh_bao && kq.canh_bao.length) {
@@ -541,8 +622,9 @@ document.getElementById('tx-tao-phieu').addEventListener('click', async () => {
     }
     ketQuaEl.innerHTML = html;
     ketQuaEl.style.display = 'flex';
-    document.getElementById('tx-xem-truoc').innerHTML = '';
     document.getElementById('tx-phieu-nhap').value = '';
+    txItems = []; txNhom = []; txPhanBo = {};
+    veNhomList(); veBangPhanBo();
   } catch (err) {
     if (err.data && err.data.chi_tiet) {
       hienLoi(loiEl, 'Không đủ tồn kho:<br>' + err.data.chi_tiet
@@ -551,6 +633,41 @@ document.getElementById('tx-tao-phieu').addEventListener('click', async () => {
     } else {
       hienLoi(loiEl, err.message);
     }
+  }
+});
+
+veNhomList();
+veBangPhanBo();
+
+// ===== CẤU HÌNH MẪU PHIẾU =====
+async function taiCauHinh() {
+  const ch = await goiApi('/api/cau-hinh');
+  document.getElementById('ch-ten-don-vi').value = ch.ten_don_vi || '';
+  document.getElementById('ch-bo-phan').value = ch.bo_phan || '';
+  document.getElementById('ch-ghi-chu-tt').value = ch.ghi_chu_thong_tu || '';
+  document.getElementById('ch-ghi-chu-tt-2').value = ch.ghi_chu_thong_tu_2 || '';
+  document.getElementById('ch-nguoi-ky-nhap').value = ch.nguoi_ky_nhap || '';
+  document.getElementById('ch-nguoi-ky-xuat').value = ch.nguoi_ky_xuat || '';
+}
+
+document.getElementById('ch-luu').addEventListener('click', async () => {
+  const ketQuaEl = document.getElementById('ch-ket-qua');
+  const body = {
+    ten_don_vi: document.getElementById('ch-ten-don-vi').value.trim(),
+    bo_phan: document.getElementById('ch-bo-phan').value.trim(),
+    ghi_chu_thong_tu: document.getElementById('ch-ghi-chu-tt').value.trim(),
+    ghi_chu_thong_tu_2: document.getElementById('ch-ghi-chu-tt-2').value.trim(),
+    nguoi_ky_nhap: document.getElementById('ch-nguoi-ky-nhap').value.trim(),
+    nguoi_ky_xuat: document.getElementById('ch-nguoi-ky-xuat').value.trim(),
+  };
+  try {
+    await goiApi('/api/cau-hinh', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    ketQuaEl.innerHTML = '<i class="fas fa-circle-check"></i><span>Đã lưu cấu hình. Các phiếu xuất Excel tiếp theo sẽ dùng thông tin này.</span>';
+    ketQuaEl.style.display = 'flex';
+  } catch (err) {
+    ketQuaEl.className = 'ui-note danger';
+    ketQuaEl.innerHTML = `<i class="fas fa-triangle-exclamation"></i><span>${err.message}</span>`;
+    ketQuaEl.style.display = 'flex';
   }
 });
 
