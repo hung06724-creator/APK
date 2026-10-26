@@ -19,11 +19,9 @@
       <div class="nav-item active" data-tab="ton-kho"><span class="icon"><i class="fas fa-boxes-stacked"></i></span><span class="label">Tồn kho</span></div>
       <div class="nav-item" data-tab="phieu-nhap"><span class="icon"><i class="fas fa-truck-ramp-box"></i></span><span class="label">Phiếu nhập</span></div>
       <div class="nav-item" data-tab="phieu-xuat"><span class="icon"><i class="fas fa-truck-fast"></i></span><span class="label">Phiếu xuất</span></div>
-      <div class="nav-item" data-tab="tao-nhap"><span class="icon"><i class="fas fa-file-circle-plus"></i></span><span class="label">+ Phiếu nhập mới</span></div>
-      <div class="nav-item" data-tab="tao-xuat"><span class="icon"><i class="fas fa-file-export"></i></span><span class="label">+ Phiếu xuất mới</span></div>
+      <div class="nav-item" data-tab="tao-nhap" data-nhom="tao-phieu"><span class="icon"><i class="fas fa-file-circle-plus"></i></span><span class="label">Tạo phiếu</span></div>
       <div class="nav-item" data-tab="tach-xuat"><span class="icon"><i class="fas fa-code-fork"></i></span><span class="label">Tách phiếu xuất</span></div>
       <div class="nav-item" data-tab="so-tong-hop"><span class="icon"><i class="fas fa-book"></i></span><span class="label">Sổ tổng hợp</span></div>
-      <div class="nav-item" data-tab="cau-hinh"><span class="icon"><i class="fas fa-gear"></i></span><span class="label">Cấu hình mẫu phiếu</span></div>
     </div>
   </nav>
 
@@ -88,6 +86,7 @@
 
     <!-- TẠO PHIẾU NHẬP -->
     <section id="tao-nhap" class="page">
+      <div class="tao-phieu-bar"></div>
       <div class="ui-head">
         <div>
           <h1>Tạo phiếu nhập kho</h1>
@@ -163,6 +162,7 @@
 
     <!-- TẠO PHIẾU XUẤT -->
     <section id="tao-xuat" class="page">
+      <div class="tao-phieu-bar"></div>
       <div class="ui-head">
         <div>
           <h1>Tạo phiếu xuất kho</h1>
@@ -363,29 +363,38 @@
       </div>
     </section>
 
-    <!-- CẤU HÌNH MẪU PHIẾU EXCEL -->
-    <section id="cau-hinh" class="page">
+    <!-- CẤU HÌNH MẪU PHIẾU NHẬP -->
+    <section id="cau-hinh-nhap" class="page cau-hinh-page" data-loai="nhap">
+      <div class="tao-phieu-bar" data-loai="nhap"></div>
       <div class="ui-head">
         <div>
-          <h1>Cấu hình mẫu phiếu Excel</h1>
-          <p>Các trường này áp dụng cho mọi phiếu nhập/xuất khi xuất ra Excel. Tên người, danh sách người ký cách nhau bằng dấu phẩy.</p>
+          <h1>Cấu hình mẫu phiếu nhập kho</h1>
+          <p>Đây là mẫu phiếu nhập kho khi xuất Excel. Điền trực tiếp vào các ô <b class="xl-chu-thich-vang">màu vàng</b>; phần chữ xám là thông tin tự điền khi bạn tạo phiếu.</p>
         </div>
+        <div class="ui-head-actions"><button class="btn btn-primary ch-luu" data-loai="nhap" type="button"><i class="fas fa-floppy-disk"></i> Lưu cấu hình</button></div>
       </div>
       <div class="ui-card">
-        <div class="ui-card-body">
-          <div class="ui-field">Tên đơn vị (dòng đầu phiếu)<input id="ch-ten-don-vi" class="ui-input" /></div>
-          <div class="ui-field">Bộ phận<input id="ch-bo-phan" class="ui-input" /></div>
-          <div class="ui-field">Dòng "Kèm theo Thông tư..." (dòng 1)<input id="ch-ghi-chu-tt" class="ui-input" /></div>
-          <div class="ui-field">Dòng "Kèm theo Thông tư..." (dòng 2)<input id="ch-ghi-chu-tt-2" class="ui-input" /></div>
-          <div class="ui-field">Người ký — Phiếu nhập kho (chức danh, cách nhau bằng dấu phẩy)<input id="ch-nguoi-ky-nhap" class="ui-input" placeholder="Người lập phiếu, Người giao hàng, Thủ kho, Kế toán trưởng" /></div>
-          <div class="ui-field">Tên người ký — Phiếu nhập kho (đúng thứ tự chức danh ở trên, để trống thì không in tên)<input id="ch-ten-nguoi-ky-nhap" class="ui-input" placeholder="Nguyễn Văn A, Trần Thị B, Lê Văn C, Phạm Thị D" /></div>
-          <div class="ui-field">Người ký — Phiếu xuất kho (chức danh, cách nhau bằng dấu phẩy)<input id="ch-nguoi-ky-xuat" class="ui-input" placeholder="Người lập phiếu, Người nhận hàng, Thủ kho, Kế toán trưởng" /></div>
-          <div class="ui-field">Tên người ký — Phiếu xuất kho (đúng thứ tự chức danh ở trên, để trống thì không in tên)<input id="ch-ten-nguoi-ky-xuat" class="ui-input" placeholder="Nguyễn Văn A, Trần Thị B, Lê Văn C, Phạm Thị D" /></div>
-          <div id="ch-ket-qua" class="ui-note" style="display:none"></div>
-          <div class="ui-actions-end"><button class="btn btn-primary" id="ch-luu"><i class="fas fa-floppy-disk"></i> Lưu cấu hình</button></div>
-        </div>
+        <div class="xl-scroll"><div class="xl-mau" id="xl-nhap"></div></div>
       </div>
+      <div class="ui-note ch-ket-qua" style="display:none"></div>
     </section>
+
+    <!-- CẤU HÌNH MẪU PHIẾU XUẤT -->
+    <section id="cau-hinh-xuat" class="page cau-hinh-page" data-loai="xuat">
+      <div class="tao-phieu-bar" data-loai="xuat"></div>
+      <div class="ui-head">
+        <div>
+          <h1>Cấu hình mẫu phiếu xuất kho</h1>
+          <p>Đây là mẫu phiếu xuất kho khi xuất Excel. Điền trực tiếp vào các ô <b class="xl-chu-thich-vang">màu vàng</b>; phần chữ xám là thông tin tự điền khi bạn tạo phiếu.</p>
+        </div>
+        <div class="ui-head-actions"><button class="btn btn-primary ch-luu" data-loai="xuat" type="button"><i class="fas fa-floppy-disk"></i> Lưu cấu hình</button></div>
+      </div>
+      <div class="ui-card">
+        <div class="xl-scroll"><div class="xl-mau" id="xl-xuat"></div></div>
+      </div>
+      <div class="ui-note ch-ket-qua" style="display:none"></div>
+    </section>
+
   </main>
 
   <div id="dialog-goc"></div>
