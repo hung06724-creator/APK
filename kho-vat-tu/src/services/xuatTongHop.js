@@ -617,9 +617,8 @@ function dongCuaKy(ky, duLieu) {
 }
 
 // Dữ liệu 1 kỳ (JSON cho màn xem trước): {ky, dong, tong, canh_bao, so_dong}.
-function layDuLieuKy(ky, duLieu) {
-  const dl = duLieu || layDuLieuTuDb();
-  const dong = dongCuaKy(ky, dl);
+function layDuLieuKy(ky) {
+  const dong = dongCuaKy(ky, layDuLieuTuDb());
   return {
     ky: { loai: ky.loai, nam: ky.nam || null, quy: ky.quy || null, tu_ngay: ky.tu, den_ngay: ky.den, tieu_de: ky.tieuDe },
     dong,
@@ -1054,11 +1053,10 @@ function taoWorkbook({ tenDonVi, kyList, duLieu }) {
 }
 
 // Xuất buffer .xlsx. query như route: {quy, nam, tu_ngay, den_ngay, cac_quy}.
-async function xuatTongHop(query, tuyChon = {}) {
+async function xuatTongHop(query) {
   const q = query || {};
-  const dl = tuyChon.duLieu || layDuLieuTuDb();
-  const tenDonVi =
-    tuyChon.tenDonVi !== undefined ? tuyChon.tenDonVi : require('../db').layCauHinh().ten_don_vi;
+  const dl = layDuLieuTuDb();
+  const tenDonVi = require('../db').layCauHinh().ten_don_vi;
 
   let kyList;
   let tenFile;
@@ -1080,15 +1078,4 @@ async function xuatTongHop(query, tuyChon = {}) {
   return { buffer, tenFile: `Tong_hop_nhap_xuat_vat_tu_${tenFile}.xlsx`, kyList };
 }
 
-module.exports = {
-  taoDongSoTongHop,
-  tinhTong,
-  gomCanhBao,
-  xacDinhKy,
-  cacQuyCuaNam,
-  layDuLieuTuDb,
-  layDuLieuKy,
-  dongCuaKy,
-  taoWorkbook,
-  xuatTongHop,
-};
+module.exports = { xacDinhKy, layDuLieuKy, xuatTongHop };

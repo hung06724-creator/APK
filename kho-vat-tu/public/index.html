@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Quản lý kho vật tư - CĐN Công nghiệp Hà Nội</title>
+  <title>Quản lý kho &amp; tài sản - CĐN Công nghiệp Hà Nội</title>
   <link rel="icon" type="image/jpeg" href="/logo/logo-hnivc-mau.jpg" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
@@ -12,16 +12,21 @@
 <body class="ui-scope">
   <nav class="sidebar">
     <div class="sidebar-header">
-      <h2><img class="school-logo" src="/logo/logo-hnivc-mau.jpg" alt="Logo trường" /> <span>KHO VẬT TƯ</span></h2>
+      <h2><img class="school-logo" src="/logo/logo-hnivc-mau.jpg" alt="Logo trường" /> <span>KHO &amp; TÀI SẢN</span></h2>
       <small>CĐN Công nghiệp Hà Nội</small>
     </div>
     <div class="nav-section">
+      <div class="nav-nhom">Kho vật tư</div>
       <div class="nav-item active" data-tab="ton-kho"><span class="icon"><i class="fas fa-boxes-stacked"></i></span><span class="label">Tồn kho</span></div>
       <div class="nav-item" data-tab="phieu-nhap"><span class="icon"><i class="fas fa-truck-ramp-box"></i></span><span class="label">Phiếu nhập</span></div>
       <div class="nav-item" data-tab="phieu-xuat"><span class="icon"><i class="fas fa-truck-fast"></i></span><span class="label">Phiếu xuất</span></div>
       <div class="nav-item" data-tab="tao-nhap" data-nhom="tao-phieu"><span class="icon"><i class="fas fa-file-circle-plus"></i></span><span class="label">Tạo phiếu</span></div>
       <div class="nav-item" data-tab="tach-xuat"><span class="icon"><i class="fas fa-code-fork"></i></span><span class="label">Tách phiếu xuất</span></div>
       <div class="nav-item" data-tab="so-tong-hop"><span class="icon"><i class="fas fa-book"></i></span><span class="label">Sổ tổng hợp</span></div>
+      <div class="nav-nhom">Tài sản</div>
+      <div class="nav-item" data-tab="tscd"><span class="icon"><i class="fas fa-computer"></i></span><span class="label">Tài sản cố định</span></div>
+      <div class="nav-item" data-tab="ccdc"><span class="icon"><i class="fas fa-screwdriver-wrench"></i></span><span class="label">Công cụ dụng cụ</span></div>
+      <div class="nav-item" data-tab="kiem-ke"><span class="icon"><i class="fas fa-clipboard-check"></i></span><span class="label">Kiểm kê</span></div>
     </div>
   </nav>
 
@@ -31,18 +36,32 @@
       <div class="ui-head">
         <div>
           <h1>Tồn kho</h1>
-          <p>Tồn kho hiện tại = tổng nhập &minus; tổng xuất, tính theo từng vật tư.</p>
+          <p>Tồn kho = tồn đầu kỳ + tổng nhập &minus; tổng xuất. Bấm vào một vật tư để xem lịch sử nhập &ndash; xuất.</p>
+        </div>
+        <div class="ui-head-actions">
+          <div class="ui-menu">
+            <button class="btn btn-neutral" type="button" data-menu-mo aria-haspopup="true" aria-expanded="false"><i class="fas fa-scale-balanced"></i> Tồn đầu kỳ <i class="fas fa-chevron-down ui-menu-mui"></i></button>
+            <div class="ui-menu-ds" hidden>
+              <a href="/api/xuat/ton-am"><i class="fas fa-triangle-exclamation"></i> Danh sách vật tư tồn âm (Excel)</a>
+              <button type="button" id="tdk-nap"><i class="fas fa-file-import"></i> Nạp tồn đầu kỳ từ file</button>
+              <button type="button" id="tdk-ds"><i class="fas fa-list"></i> Tồn đầu kỳ đã nạp</button>
+            </div>
+          </div>
+          <a class="btn btn-secondary" id="tk-xuat" href="/api/xuat/ton-kho" title="Xuất đúng danh sách đang lọc"><i class="fas fa-file-excel"></i> Xuất Excel</a>
         </div>
       </div>
+      <div class="ts-chip-hang" id="tk-chip"></div>
       <div class="ui-card">
+        <div class="ts-loc"><input class="ui-input ts-loc-tim" id="tk-tim" placeholder="Tìm theo tên vật tư, mã số..." autocomplete="off" /></div>
         <div class="ui-table-scroll">
-          <table class="ui-table">
+          <table class="ui-table tk-bang">
             <thead>
-              <tr><th>Tên hàng</th><th>ĐVT</th><th class="num">Tổng nhập</th><th class="num">Tổng xuất</th><th class="num">Tồn kho</th></tr>
+              <tr><th>Tên hàng</th><th>ĐVT</th><th class="num">Đầu kỳ</th><th class="num">Tổng nhập</th><th class="num">Tổng xuất</th><th class="num">Tồn kho</th></tr>
             </thead>
             <tbody id="bang-ton-kho"></tbody>
           </table>
         </div>
+        <div class="ts-chan-bang" id="tk-chan"></div>
       </div>
     </section>
 
@@ -51,17 +70,23 @@
       <div class="ui-head">
         <div>
           <h1>Phiếu nhập kho</h1>
-          <p>Danh sách toàn bộ phiếu nhập đã lưu.</p>
+          <p>Bấm vào một phiếu để xem chi tiết các dòng hàng.</p>
         </div>
-        <div class="ui-head-actions"><button class="btn btn-primary" data-goto="tao-nhap"><i class="fas fa-plus"></i> Tạo phiếu nhập</button></div>
+        <div class="ui-head-actions"><a class="btn btn-secondary" id="pl-xuat-nhap" href="/api/xuat/phieu-nhap" title="Xuất đúng danh sách đang lọc"><i class="fas fa-file-excel"></i> Xuất bảng kê</a><button class="btn btn-primary" data-goto="tao-nhap"><i class="fas fa-plus"></i> Tạo phiếu nhập</button></div>
       </div>
       <div class="ui-card">
+        <div class="ts-loc" data-pl-loc="nhap">
+          <input class="ui-input ts-loc-tim" data-pl="q" placeholder="Tìm số phiếu, người nhập, đơn vị, nội dung..." autocomplete="off" />
+          <select class="ui-input" data-pl="thang"><option value="">Mọi tháng</option></select>
+          <select class="ui-input" data-pl="nguon"><option value="">Mọi nguồn KP</option><option value="661.2">TK 661.2</option><option value="337">TK 337</option></select>
+        </div>
         <div class="ui-table-scroll">
-          <table class="ui-table">
-            <thead><tr><th>Số phiếu</th><th>Ngày</th><th>Nhà cung cấp</th><th>Người nhập</th><th>Nguồn KP</th><th class="num">Tổng cộng</th><th></th></tr></thead>
+          <table class="ui-table pl-bang">
+            <thead><tr><th>Số phiếu</th><th>Ngày</th><th>Nội dung</th><th>Người nhập</th><th>Nguồn KP</th><th class="num">Tổng cộng</th><th></th></tr></thead>
             <tbody id="bang-phieu-nhap"></tbody>
           </table>
         </div>
+        <div class="ts-chan-bang" id="pl-chan-nhap"></div>
       </div>
     </section>
 
@@ -70,17 +95,23 @@
       <div class="ui-head">
         <div>
           <h1>Phiếu xuất kho</h1>
-          <p>Danh sách toàn bộ phiếu xuất đã lưu.</p>
+          <p>Bấm vào một phiếu để xem chi tiết các dòng hàng.</p>
         </div>
-        <div class="ui-head-actions"><button class="btn btn-primary" data-goto="tao-xuat"><i class="fas fa-plus"></i> Tạo phiếu xuất</button></div>
+        <div class="ui-head-actions"><a class="btn btn-secondary" id="pl-xuat-xuat" href="/api/xuat/phieu-xuat" title="Xuất đúng danh sách đang lọc"><i class="fas fa-file-excel"></i> Xuất bảng kê</a><button class="btn btn-primary" data-goto="tao-xuat"><i class="fas fa-plus"></i> Tạo phiếu xuất</button></div>
       </div>
       <div class="ui-card">
+        <div class="ts-loc" data-pl-loc="xuat">
+          <input class="ui-input ts-loc-tim" data-pl="q" placeholder="Tìm số phiếu, người nhận, đơn vị, lý do..." autocomplete="off" />
+          <select class="ui-input" data-pl="thang"><option value="">Mọi tháng</option></select>
+          <select class="ui-input" data-pl="nguon"><option value="">Mọi nguồn KP</option><option value="661.2">TK 661.2</option><option value="337">TK 337</option></select>
+        </div>
         <div class="ui-table-scroll">
-          <table class="ui-table">
+          <table class="ui-table pl-bang">
             <thead><tr><th>Số phiếu</th><th>Ngày</th><th>Người nhận</th><th>Lý do xuất</th><th>Nguồn KP</th><th class="num">Tổng cộng</th><th></th></tr></thead>
             <tbody id="bang-phieu-xuat"></tbody>
           </table>
         </div>
+        <div class="ts-chan-bang" id="pl-chan-xuat"></div>
       </div>
     </section>
 
@@ -89,10 +120,11 @@
       <div class="tao-phieu-bar"></div>
       <div class="ui-head">
         <div>
-          <h1>Tạo phiếu nhập kho</h1>
+          <h1 id="pn-tieu-de">Tạo phiếu nhập kho</h1>
           <p>Tải hóa đơn PDF để tự điền, hoặc nhập tay — luôn kiểm tra lại trước khi lưu.</p>
         </div>
       </div>
+      <div class="ui-note sua-phieu" id="pn-dang-sua" hidden></div>
 
       <div class="ui-card">
         <div class="ui-card-body">
@@ -165,10 +197,11 @@
       <div class="tao-phieu-bar"></div>
       <div class="ui-head">
         <div>
-          <h1>Tạo phiếu xuất kho</h1>
+          <h1 id="px-tieu-de">Tạo phiếu xuất kho</h1>
           <p>Chọn vật tư từ danh sách tồn kho — hệ thống tự chặn nếu xuất vượt tồn.</p>
         </div>
       </div>
+      <div class="ui-note sua-phieu" id="px-dang-sua" hidden></div>
 
       <div class="ui-card">
         <div class="ui-card-head"><h2>Thông tin phiếu xuất kho</h2></div>
@@ -320,7 +353,7 @@
             </div>
           </div>
           <div class="th-nut">
-            <button class="btn btn-secondary" id="th-xem" type="button"><i class="fas fa-eye"></i> Xem trước</button>
+            <button class="btn btn-secondary" id="th-xem" type="button" title="Tải lại số liệu kỳ đang chọn"><i class="fas fa-rotate"></i> Tải lại</button>
             <button class="btn btn-primary btn-wrap" id="th-xuat" type="button"><i class="fas fa-file-excel"></i> Xuất Excel (đúng mẫu sổ tổng hợp)</button>
             <label class="th-check"><input type="checkbox" id="th-cac-quy" /> Xuất đủ 4 quý thành 4 sheet</label>
           </div>
@@ -395,11 +428,19 @@
       <div class="ui-note ch-ket-qua" style="display:none"></div>
     </section>
 
+    <!-- TÀI SẢN CỐ ĐỊNH / CÔNG CỤ DỤNG CỤ (nội dung dựng bởi js/tai-san.js) -->
+    <section id="tscd" class="page"></section>
+    <section id="ccdc" class="page"></section>
+    <!-- KIỂM KÊ (nội dung dựng bởi js/kiem-ke.js) -->
+    <section id="kiem-ke" class="page"></section>
+
   </main>
 
   <div id="dialog-goc"></div>
   <div id="toast-goc" class="ui-toast-wrap" aria-live="polite"></div>
 
   <script src="/js/app.js"></script>
+  <script src="/js/tai-san.js"></script>
+  <script src="/js/kiem-ke.js"></script>
 </body>
 </html>

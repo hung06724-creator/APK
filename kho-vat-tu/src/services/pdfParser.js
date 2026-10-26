@@ -474,9 +474,12 @@ function phanTichVanBan(text, pages) {
 
 async function parsePdfBuffer(buffer) {
   const parser = new PDFParse({ data: buffer });
-  const { text, pages } = await parser.getText();
-  await parser.destroy();
-  return phanTichVanBan(text, pages);
+  try {
+    const { text, pages } = await parser.getText();
+    return phanTichVanBan(text, pages);
+  } finally {
+    await parser.destroy(); // giải phóng bộ nhớ cả khi file PDF hỏng
+  }
 }
 
-module.exports = { parsePdfBuffer, parseSoVN, phanTichVanBan };
+module.exports = { parsePdfBuffer };

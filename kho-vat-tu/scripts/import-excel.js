@@ -13,9 +13,10 @@
 // bỏ qua (chạy lại cùng file nhiều lần không tạo bản sao). Toàn bộ lần nạp nằm trong 1 transaction.
 const path = require('path');
 const ExcelJS = require('exceljs');
-const { db, findOrCreateVatTu } = require('../src/db');
+const { db, findOrCreateVatTu, saoLuuDb } = require('../src/db');
 const { soTienBangChu } = require('../src/services/soTienBangChu');
 const { ghepXuatVoiNhap } = require('../src/services/ghepNhapXuat');
+const { chuanHoaSoPhieu } = require('../src/services/soPhieu');
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -396,7 +397,7 @@ function luuPhieuXuat(p) {
   }
 }
 
-const BANG = { nhap: 'phieu_nhap', xuat: 'phieu_xuat' };
+
 const timTrung = {
   nhap: db.prepare('SELECT id FROM phieu_nhap WHERE so_phieu IS ? AND ngay IS ? AND ABS(tong_cong - ?) < 0.5'),
   xuat: db.prepare('SELECT id FROM phieu_xuat WHERE so_phieu IS ? AND ngay IS ? AND ABS(tong_cong - ?) < 0.5'),
@@ -418,6 +419,7 @@ async function main() {
     const { phieuList, khongNhanDien } = docSheet(ws);
     const demSheet = { nhap: { doc: 0, nap: 0, db: 0, file: 0 }, xuat: { doc: 0, nap: 0, db: 0, file: 0 } };
     for (const p of phieuList) {
+      p.so_phieu = chuanHoaSoPhieu(p.loai, p.so_phieu) || p.so_phieu;
       const nhan = `[${p.loai === 'nhap' ? 'NHẬP' : 'XUẤT'}] dòng ${p.dong_bat_dau} số "${p.so_phieu}" ${p.ngay || '(không ngày)'}`;
       tongKet[p.loai].doc++;
       demSheet[p.loai].doc++;
@@ -467,6 +469,7 @@ async function main() {
   if (thieuCt > 0) canhBaoTatCa.push(`${thieuCt}/${choNap.length} phiếu không có dòng "Số chứng từ gốc kèm theo" (để trống)`);
 
   if (!dryRun && choNap.length > 0) {
+    console.log(`Đã sao lưu database: ${saoLuuDb()}`);
     const tx = db.transaction(() => {
       for (const p of choNap) (p.loai === 'nhap' ? luuPhieuNhap : luuPhieuXuat)(p);
     });

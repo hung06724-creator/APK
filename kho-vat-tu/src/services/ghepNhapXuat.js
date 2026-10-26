@@ -185,5 +185,4 @@ module.exports = {
   chuanHoaNguonKinhPhi,
   laNguonKinhPhiHopLe,
   chuoiHoacNull,
-  NGUON_KINH_PHI_HOP_LE,
 };
