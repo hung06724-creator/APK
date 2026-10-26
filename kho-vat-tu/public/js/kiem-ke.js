@@ -213,7 +213,8 @@ async function kkMoDot(id) {
   quet.focus();
 }
 
-const kkKhoa = () => kkTT.dot && kkTT.dot.trang_thai === 'da_chot';
+// Đợt đã chốt, hoặc ngày kiểm kê thuộc năm đã khóa sổ: chỉ xem và xuất biên bản.
+const kkKhoa = () => kkTT.dot && (kkTT.dot.trang_thai === 'da_chot' || namBiKhoa(kkTT.dot.ngay));
 
 function kkVeDau() {
   const k = kkTT.dot;
@@ -221,15 +222,20 @@ function kkVeDau() {
   sec.querySelector('[data-kk-tieu-de]').textContent = k.ten;
   sec.querySelector('[data-kk-phu-de]').innerHTML = `${esc(KK_LOAI[k.loai])} · ${esc(kkPhamVi(k))} · Ngày kiểm kê ${esc(ngayVN(k.ngay))} · ${kkPillTT(k)}`;
   const khoa = kkKhoa();
+  const namKhoaDot = namBiKhoa(k.ngay);
   sec.querySelector('[data-kk-khoa]').hidden = !khoa;
+  sec.querySelector('[data-kk-khoa] span').textContent = namKhoaDot
+    ? `Năm ${namCuaNgay(k.ngay)} đã khóa sổ — đợt kiểm kê này chỉ xem và xuất biên bản.`
+    : 'Đợt đã chốt — chỉ xem và xuất biên bản. Tick các dòng "Không thấy" / "Hỏng" để ghi giảm hoặc đổi tình trạng trong danh mục tài sản. Bấm "Mở lại đợt" nếu cần sửa kết quả.';
   sec.querySelector('[data-kk-quet-khung]').style.display = khoa ? 'none' : '';
   sec.querySelector('[data-kk-co-het]').style.display = khoa ? 'none' : '';
   sec.querySelector('[data-kk-nut-dau]').innerHTML = `
-    <button class="btn btn-neutral" type="button" data-kk-sua><i class="fas fa-pen"></i> Thông tin đợt</button>
+    ${namKhoaDot ? '' : '<button class="btn btn-neutral" type="button" data-kk-sua><i class="fas fa-pen"></i> Thông tin đợt</button>'}
     <a class="btn btn-secondary" href="/api/kiem-ke/${k.id}/bien-ban"><i class="fas fa-file-excel"></i> Xuất biên bản</a>
-    ${khoa ? '<button class="btn btn-neutral" type="button" data-kk-mo-lai><i class="fas fa-lock-open"></i> Mở lại đợt</button>'
+    ${namKhoaDot ? '' : khoa ? '<button class="btn btn-neutral" type="button" data-kk-mo-lai><i class="fas fa-lock-open"></i> Mở lại đợt</button>'
       : '<button class="btn btn-primary" type="button" data-kk-chot><i class="fas fa-lock"></i> Chốt đợt</button>'}`;
-  sec.querySelector('[data-kk-sua]').addEventListener('click', kkSuaDot);
+  const nutSua = sec.querySelector('[data-kk-sua]');
+  if (nutSua) nutSua.addEventListener('click', kkSuaDot);
   const chot = sec.querySelector('[data-kk-chot]');
   if (chot) chot.addEventListener('click', kkChot);
   const moLai = sec.querySelector('[data-kk-mo-lai]');

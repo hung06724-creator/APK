@@ -167,6 +167,22 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 // Phiếu đã lưu đang được sửa trên form tạo phiếu: { id, so_phieu, ngay, congLai } (congLai: Map vat_tu_id -> số lượng
 // của chính phiếu xuất đó, được cộng lại vào tồn khi kiểm tra). null = form đang tạo phiếu mới.
 const dangSua = { nhap: null, xuat: null };
+// Các năm đã khóa sổ (tải khi mở trang và sau mỗi lần khóa / mở khóa): nghiệp vụ năm đó chỉ còn xem và xuất báo cáo.
+let namKhoa = new Set();
+function namBiKhoa(ngay) {
+  const m = /^(\d{4})-/.exec(String(ngay || ''));
+  return m ? namKhoa.has(Number(m[1])) : false;
+}
+const namCuaNgay = (ngay) => String(ngay || '').slice(0, 4);
+async function taiNamKhoa() {
+  try {
+    const d = await goiApi('/api/khoa-so');
+    namKhoa = new Set(d.nam.filter((x) => x.khoa).map((x) => x.nam));
+    return d;
+  } catch (e) {
+    return null;
+  }
+}
 
 // ===== Menu thả xuống dùng chung (.ui-menu > [data-menu-mo] + .ui-menu-ds) =====
 // Ủy quyền sự kiện ở document nên dùng được cho cả menu dựng động (trang tài sản...).
@@ -257,6 +273,7 @@ function chuyenTab(tab) {
   if (tab === 'so-tong-hop') khoiTaoSoTongHop();
   if (tab === 'tscd' || tab === 'ccdc') taiTaiSan(tab);
   if (tab === 'kiem-ke') taiKiemKe();
+  if (tab === 'khoa-so') taiTrangKhoaSo();
   if (tab === 'cau-hinh-nhap') taiCauHinh('nhap');
   if (tab === 'cau-hinh-xuat') taiCauHinh('xuat');
 }
@@ -453,7 +470,8 @@ document.getElementById('tdk-ds').addEventListener('click', async () => {
   const ve = () => (ds.length ? ds.map((t) => `<tr><td>${esc(t.ten_hang)}</td><td>${esc(t.dvt)}</td><td>${esc(ngayVN(t.ngay))}</td>
       <td class="num">${formatSo(t.so_luong)}</td><td class="num">${t.don_gia === null ? '' : formatTien(t.don_gia)}</td>
       <td class="tdk-nguon">${esc(t.nguon || '')}</td>
-      <td><button class="btn btn-sm btn-danger" type="button" data-tdk-xoa="${t.id}" title="Xóa tồn đầu kỳ này"><i class="fas fa-trash"></i></button></td></tr>`).join('')
+      <td>${namBiKhoa(t.ngay) ? `<i class="fas fa-lock ui-khoa" title="Năm ${namCuaNgay(t.ngay)} đã khóa sổ"></i>`
+        : `<button class="btn btn-sm btn-danger" type="button" data-tdk-xoa="${t.id}" title="Xóa tồn đầu kỳ này"><i class="fas fa-trash"></i></button>`}</td></tr>`).join('')
     : oTrong(7, 'inbox', 'Chưa nạp tồn đầu kỳ nào.'));
   const goc = moDialog('Tồn đầu kỳ đã nạp', `${ds.length} vật tư có tồn đầu kỳ.`,
     `<div class="ui-table-scroll"><table class="ui-table"><thead><tr><th>Vật tư</th><th>ĐVT</th><th>Ngày</th><th class="num">Số lượng</th><th class="num">Đơn giá</th><th>Nguồn</th><th></th></tr></thead>
@@ -474,12 +492,13 @@ document.getElementById('tdk-ds').addEventListener('click', async () => {
 
 // ===== DANH SÁCH PHIẾU NHẬP / XUẤT =====
 function nutHanhDong(loai, r) {
+  const khoa = namBiKhoa(r.ngay); // phiếu năm đã khóa sổ: chỉ còn nút Excel
   return `
     <div class="ds-nut">
-      <button class="btn btn-sm btn-neutral btn-icon" data-sua-phieu type="button" title="Sửa phiếu: dòng hàng, số lượng, đơn giá" aria-label="Sửa phiếu"><i class="fas fa-pen"></i></button>
-      <button class="btn btn-sm btn-secondary btn-icon" data-so-sach="${loai}:${r.id}" type="button" title="Sổ sách: TK đối ứng, tiểu mục, nguồn kinh phí" aria-label="Sổ sách"><i class="fas fa-book"></i></button>
+      ${khoa ? '' : `<button class="btn btn-sm btn-neutral btn-icon" data-sua-phieu type="button" title="Sửa phiếu: dòng hàng, số lượng, đơn giá" aria-label="Sửa phiếu"><i class="fas fa-pen"></i></button>
+      <button class="btn btn-sm btn-secondary btn-icon" data-so-sach="${loai}:${r.id}" type="button" title="Sổ sách: TK đối ứng, tiểu mục, nguồn kinh phí" aria-label="Sổ sách"><i class="fas fa-book"></i></button>`}
       <a class="btn btn-sm btn-neutral btn-icon" href="/api/phieu-${loai}/${r.id}/xuat-excel" title="Xuất phiếu ra Excel (mẫu in)" aria-label="Xuất Excel"><i class="fas fa-file-excel"></i></a>
-      <button class="btn btn-sm btn-danger btn-icon" data-xoa-${loai}="${r.id}" type="button" title="Xóa phiếu" aria-label="Xóa phiếu"><i class="fas fa-trash"></i></button>
+      ${khoa ? '' : `<button class="btn btn-sm btn-danger btn-icon" data-xoa-${loai}="${r.id}" type="button" title="Xóa phiếu" aria-label="Xóa phiếu"><i class="fas fa-trash"></i></button>`}
     </div>`;
 }
 
@@ -517,7 +536,7 @@ function vePhieu(loai) {
   const tbody = document.getElementById(`bang-phieu-${loai}`);
   tbody.innerHTML = ds.length
     ? ds.map((r) => `<tr data-phieu="${r.id}" class="dong-bam" tabindex="0">
-        <td class="ui-strong ds-so">${esc(r.so_phieu || '(không số)')}<span class="ds-sub">${esc(r.so_dong)} dòng</span></td>
+        <td class="ui-strong ds-so">${namBiKhoa(r.ngay) ? `<i class="fas fa-lock ui-khoa" title="Năm ${namCuaNgay(r.ngay)} đã khóa sổ"></i> ` : ''}${esc(r.so_phieu || '(không số)')}<span class="ds-sub">${esc(r.so_dong)} dòng</span></td>
         <td class="th-nowrap">${esc(ngayVN(r.ngay))}</td>
         ${loai === 'nhap'
           ? `<td class="ds-cell-cat" title="${esc(noiDungPhieu(loai, r))}">${esc(noiDungPhieu(loai, r))}</td><td>${esc(r.nguoi_nhap)}</td>`
@@ -580,9 +599,11 @@ async function moChiTietPhieu(loai, id, quayLai) {
       <td class="num ui-strong">${formatSo(laNhap ? it.sl_thuc_nhap : it.sl_thuc_xuat)}</td>
       <td class="num">${formatTien(it.don_gia)}</td>
       <td class="num">${formatTien(it.thanh_tien)}</td></tr>`).join('');
+  const khoa = namBiKhoa(p.ngay); // năm đã khóa sổ: chỉ xem và xuất Excel
   const goc = moDialog(`${laNhap ? 'Phiếu nhập kho' : 'Phiếu xuất kho'} ${esc(p.so_phieu || '')}`,
     `Ngày ${esc(ngayVN(p.ngay))} · ${items.length} dòng hàng${p.sua_luc ? ` · sửa lần cuối ${esc(ngayGioVN(p.sua_luc))}` : ''}`,
-    `<div class="ts-ct-luoi">
+    `${khoa ? `<div class="ui-note khoa-so"><i class="fas fa-lock"></i><span>Năm ${namCuaNgay(p.ngay)} đã khóa sổ: phiếu chỉ xem và xuất Excel. Cần sửa thì mở khóa năm đó ở mục "Khóa sổ".</span></div>` : ''}
+     <div class="ts-ct-luoi">
        ${o(laNhap ? 'Người nhập' : 'Người nhận', laNhap ? p.nguoi_nhap : p.nguoi_nhan)}
        ${o('Đơn vị', p.don_vi)}
        ${laNhap ? o('Nhà cung cấp', p.nha_cung_cap) : ''}
@@ -602,18 +623,20 @@ async function moChiTietPhieu(loai, id, quayLai) {
        <span>Thuế (${formatSo(p.thue_suat || 0)}%): <b>${formatTien(p.tien_thue)}</b></span>
        <span>Tổng cộng: <b>${formatTien(p.tong_cong)} đ</b></span>
      </div>`,
-    `<span class="ts-chan-trai">${quayLai ? '<button class="btn btn-neutral" type="button" data-ct-quay-lai><i class="fas fa-arrow-left"></i> Lịch sử vật tư</button>' : ''}<button class="btn btn-danger" type="button" data-ct-xoa><i class="fas fa-trash"></i> Xóa phiếu</button></span>
+    `<span class="ts-chan-trai">${quayLai ? '<button class="btn btn-neutral" type="button" data-ct-quay-lai><i class="fas fa-arrow-left"></i> Lịch sử vật tư</button>' : ''}${khoa ? '' : '<button class="btn btn-danger" type="button" data-ct-xoa><i class="fas fa-trash"></i> Xóa phiếu</button>'}</span>
      <button class="btn btn-neutral" type="button" data-dong>Đóng</button>
-     <button class="btn btn-secondary" type="button" data-ct-sua><i class="fas fa-pen"></i> Sửa phiếu</button>
-     <button class="btn btn-secondary" type="button" data-ct-so-sach><i class="fas fa-book"></i> Sổ sách</button>
+     ${khoa ? '' : `<button class="btn btn-secondary" type="button" data-ct-sua><i class="fas fa-pen"></i> Sửa phiếu</button>
+     <button class="btn btn-secondary" type="button" data-ct-so-sach><i class="fas fa-book"></i> Sổ sách</button>`}
      <a class="btn btn-primary" href="/api/phieu-${loai}/${id}/xuat-excel"><i class="fas fa-file-excel"></i> Xuất Excel</a>`);
-  goc.querySelector('[data-ct-sua]').addEventListener('click', () => {
-    if (!coTheMoSua(loai, id)) return;
-    dongDialog();
-    moSuaPhieu(loai, p);
-  });
-  goc.querySelector('[data-ct-so-sach]').addEventListener('click', () => moSoSach(loai, id, () => moChiTietPhieu(loai, id, quayLai)));
-  goc.querySelector('[data-ct-xoa]').addEventListener('click', async () => { if (await xoaPhieu(loai, id)) dongDialog(); });
+  if (!khoa) {
+    goc.querySelector('[data-ct-sua]').addEventListener('click', () => {
+      if (!coTheMoSua(loai, id)) return;
+      dongDialog();
+      moSuaPhieu(loai, p);
+    });
+    goc.querySelector('[data-ct-so-sach]').addEventListener('click', () => moSoSach(loai, id, () => moChiTietPhieu(loai, id, quayLai)));
+    goc.querySelector('[data-ct-xoa]').addEventListener('click', async () => { if (await xoaPhieu(loai, id)) dongDialog(); });
+  }
   if (quayLai) goc.querySelector('[data-ct-quay-lai]').addEventListener('click', quayLai);
 }
 
@@ -1212,6 +1235,7 @@ function coTheMoSua(loai, id) {
 }
 // Mở form ở chế độ sửa phiếu p (đã tải kèm items).
 function moSuaPhieu(loai, p) {
+  if (namBiKhoa(p.ngay)) { hienToast(`Năm ${namCuaNgay(p.ngay)} đã khóa sổ: phiếu chỉ xem và xuất Excel.`, true); return; }
   const t = loai === 'nhap' ? 'pn' : 'px';
   dangSua[loai] = { id: p.id, so_phieu: p.so_phieu || '(không số)', ngay: p.ngay, congLai: new Map() };
   const dat = (id, v) => { document.getElementById(id).value = v === null || v === undefined ? '' : v; };
@@ -1900,3 +1924,5 @@ document.querySelectorAll('.ch-luu').forEach((nut) => nut.addEventListener('clic
 veBangDongNhap();
 veBangDongXuat();
 taiTonKho();
+// Năm đã khóa sổ: tải nền; danh sách phiếu nào đã hiện thì vẽ lại để có dấu khóa.
+taiNamKhoa().then(() => { if (plTT.nhap.rows.length) vePhieu('nhap'); if (plTT.xuat.rows.length) vePhieu('xuat'); });

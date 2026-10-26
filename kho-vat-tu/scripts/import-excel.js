@@ -17,6 +17,7 @@ const { db, findOrCreateVatTu, saoLuuDb } = require('../src/db');
 const { soTienBangChu } = require('../src/services/soTienBangChu');
 const { ghepXuatVoiNhap } = require('../src/services/ghepNhapXuat');
 const { chuanHoaSoPhieu } = require('../src/services/soPhieu');
+const { namKhoaCua } = require('../src/services/khoaSo');
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -433,6 +434,12 @@ async function main() {
         trangThai = 'BỎ QUA (trùng khối khác trong file)';
         tongKet[p.loai].boQuaFile++;
         demSheet[p.loai].file++;
+      } else if (namKhoaCua(p.ngay)) {
+        // Năm đã khóa sổ: không nạp thêm phiếu vào năm đó (mở khóa ở mục "Khóa sổ" trước).
+        trangThai = `BỎ QUA (năm ${namKhoaCua(p.ngay)} đã khóa sổ)`;
+        tongKet[p.loai].boQuaDb++;
+        demSheet[p.loai].db++;
+        canhBaoTatCa.push(`${nhan}: bỏ qua vì năm ${namKhoaCua(p.ngay)} đã khóa sổ`);
       } else {
         daThayTrongFile.add(khoa);
         choNap.push(p);

@@ -99,9 +99,10 @@ cũng tự gọi sau khi nạp); dòng không ghép được để trống để
 server.js                      Điểm khởi động Express (chặn trang web lạ gọi vào, 404 dạng JSON)
 src/db.js                      Schema SQLite, tồn kho, sao lưu database (saoLuuDb)
 src/routes/                    API: vat-tu, phieu-nhap, phieu-xuat, upload, cau-hinh, tong-hop,
-                               tai-san, kiem-ke, ton-dau-ky, xuat (bảng kê / tồn kho / tồn âm)
+                               tai-san, kiem-ke, ton-dau-ky, khoa-so, xuat (bảng kê / tồn kho / tồn âm)
 src/services/tienIch.js        Dùng chung: tìm không dấu, ngày hôm nay, kiểm tra ngày, sắp xếp tiếng Việt
 src/services/soPhieu.js        Chuẩn hóa / sắp xếp / gợi ý số phiếu, kiểm tra trùng số trong năm
+src/services/khoaSo.js         Khóa sổ theo năm: kiểm tra ngày có thuộc năm đã khóa (lỗi 423)
 src/services/haoMon.js         Hao mòn TSCĐ (đường thẳng theo tháng, số chốt, ước tính lùi)
 src/services/mauSo.js          Khung Excel theo mẫu sổ của trường; xuat*.js: các bản xuất
 src/services/pdfParser.js      Trích xuất dữ liệu từ hóa đơn PDF
@@ -264,3 +265,34 @@ kiểm tra tồn khi tạo phiếu xuất / xóa phiếu nhập, file Excel tồ
    Đơn giá để trống → lấy đơn giá đề xuất.
 3. **Tồn đầu kỳ đã nạp** → xem / xóa từng dòng.
 API: `GET /api/ton-dau-ky`, `POST /api/ton-dau-ky/nap` (multipart: file, ngay, ghi=1), `DELETE /api/ton-dau-ky/:id`.
+
+## Khóa sổ theo năm (menu "Khóa sổ")
+
+Quyết toán xong một năm thì khóa năm đó để số liệu không bị sửa nhầm. Năm đã khóa: mọi nghiệp vụ **có ngày trong năm đó**
+chỉ còn xem và xuất báo cáo; máy chủ từ chối mọi thao tác ghi (lỗi 423, kèm hướng dẫn mở khóa).
+
+| Nghiệp vụ | Bị chặn khi năm đã khóa |
+|---|---|
+| Phiếu nhập / xuất | Thêm, sửa (ngày cũ hoặc ngày mới thuộc năm khóa), sửa sổ sách, xóa, phân bổ xuất; xóa / bỏ dòng nhập mà phiếu xuất năm khóa đã lấy theo |
+| Ghép nhập – xuất tự động | Bỏ qua dòng xuất của năm khóa |
+| Tồn đầu kỳ | Nạp (cả xem trước) với ngày năm khóa, thay số tồn đầu kỳ cũ có ngày năm khóa, xóa |
+| Tài sản TSCĐ / CCDC | Ghi tăng ngày năm khóa; sửa nguyên giá, số lượng, ngày, thời gian sử dụng, hao mòn, trường của tài sản ghi tăng năm khóa; ghi giảm / đổi tình trạng / điều chuyển có ngày năm khóa; khôi phục tài sản ghi giảm năm khóa; xóa tài sản có ghi tăng hoặc ghi giảm năm khóa |
+| Kiểm kê | Tạo, sửa, đánh dấu, chốt, mở lại, xóa đợt có ngày kiểm kê năm khóa |
+| Nạp Excel (scripts) | Phiếu / tài sản có ngày năm khóa bị bỏ qua và báo lại |
+
+Thông tin mô tả tài sản (tên, nhóm, nhà cung cấp, ghi chú...) vẫn sửa được; tài sản ghi tăng năm khóa vẫn ghi giảm được
+với ngày thuộc năm đang mở.
+
+- Trang **Khóa sổ**: bảng từng năm (phiếu nhập / xuất, dòng xuất chưa ghép, tồn đầu kỳ, tài sản ghi tăng / ghi giảm, đợt
+  kiểm kê), nút **Khóa sổ** / **Mở khóa**, ô khóa một năm khác, **Nhật ký khóa sổ**, **Xuất Excel** (khung mẫu sổ của
+  trường: sheet "Tình trạng khóa sổ" và "Nhật ký khóa sổ").
+- Hộp thoại khóa cho biết số nghiệp vụ sẽ bị khóa, nhắc vào **Sổ tổng hợp** bấm "Ghép tự động" nếu còn dòng xuất chưa
+  ghép, cảnh báo khi khóa năm hiện tại. Ghi chú khi khóa là tùy chọn.
+- **Mở khóa bắt buộc ghi lý do** (ít nhất 5 ký tự). Mọi lần khóa / mở đều vào nhật ký (thời gian, năm, ghi chú / lý do).
+- Trên giao diện, năm đã khóa: danh sách phiếu có biểu tượng ổ khóa trước số phiếu và chỉ còn nút Excel; chi tiết phiếu
+  chỉ còn Đóng / Xuất Excel; form tài sản ghi tăng năm khóa khóa các ô tài chính và ẩn nút Xóa; đợt kiểm kê năm khóa
+  chỉ xem và xuất biên bản.
+
+API: `GET /api/khoa-so` (`?them=2024` để xem thêm một năm), `POST /api/khoa-so` `{ nam, ghi_chu }`,
+`POST /api/khoa-so/:nam/mo` `{ ly_do }`, `GET /api/khoa-so/xuat-excel`. Bảng `khoa_so`, `khoa_so_lich_su`;
+kiểm tra năm khóa dùng chung ở `src/services/khoaSo.js`.

@@ -21,6 +21,7 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const { db } = require('../src/db');
 const { chuanHoa, themTaiSan, ghiLichSu, TRUONG_MAC_DINH } = require('../src/services/taiSanDungChung');
+const { namKhoaCua } = require('../src/services/khoaSo');
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -373,7 +374,10 @@ async function chay() {
       hm_luy_ke_ban_dau: t.khongChot ? null : t.hm, ngay_chot_hm: t.khongChot ? null : kq.ngayChot, nguon_kinh_phi: '661.2', ghi_chu: t.ghiChu,
     };
     const kt = chuanHoa(kq.loai, dauVao);
+    // Năm đã khóa sổ: không nạp tài sản ghi tăng / ghi giảm trong năm đó (mở khóa ở mục "Khóa sổ" trước).
+    const namKhoa = kt.loi ? null : namKhoaCua(kt.gia_tri.ngay_ghi_tang, t.giamKy ? t.ngayGiam || kq.ngayChot : null);
     if (kt.loi) loi.push(`Sheet "${kq.ws.name}" dòng ${t.dong} ("${t.ten}"): ${kt.loi}`);
+    else if (namKhoa) loi.push(`Sheet "${kq.ws.name}" dòng ${t.dong} ("${t.ten}"): năm ${namKhoa} đã khóa sổ — mở khóa trước khi nạp`);
     else hopLe.push({ ...x, gt: kt.gia_tri });
   }
   const tongNg = hopLe.reduce((s, x) => s + (x.t.giamKy ? 0 : x.t.nguyenGia), 0);

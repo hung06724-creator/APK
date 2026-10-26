@@ -53,6 +53,7 @@ function ghepXuatVoiNhap(opts = {}) {
               p.ngay, p.so_phieu
        FROM phieu_xuat_items i JOIN phieu_xuat p ON p.id = i.phieu_xuat_id
        WHERE i.phieu_nhap_item_id IS NULL
+         AND (p.ngay IS NULL OR CAST(substr(p.ngay, 1, 4) AS INTEGER) NOT IN (SELECT nam FROM khoa_so)) -- năm đã khóa sổ: không ghép thêm
        ORDER BY (p.ngay IS NULL), p.ngay, i.id`
     )
     .all();

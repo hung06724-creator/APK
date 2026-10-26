@@ -2,6 +2,7 @@ const express = require('express');
 const { headerTaiFile } = require('../services/tenFile');
 const { db, timVatTuTheoTen, khoaTenVatTu, tonKhoCuaVatTu, layCauHinh } = require('../db');
 const { ngayHopLe, soVN } = require('../services/tienIch');
+const { loiKhoaSo, LOI_KHOA } = require('../services/khoaSo');
 const { soTienBangChu } = require('../services/soTienBangChu');
 const { taoFilePhieu } = require('../services/xuatMauPhieu');
 const {
@@ -208,6 +209,8 @@ function kiemTraPhieuXuat(b, idDangSua) {
   if (itemsTho.some((it) => !((Number(it.sl_thuc_xuat) || 0) > 0))) return { loi: 'Số lượng thực xuất của mỗi dòng phải lớn hơn 0' };
   const loiDau = kiemTraDauPhieu(b.so_phieu, b.ngay, idDangSua);
   if (loiDau) return { loi: loiDau };
+  const khoa = loiKhoaSo(idDangSua ? 'sửa phiếu xuất' : 'thêm phiếu xuất', b.ngay);
+  if (khoa) return { loi: khoa, status: LOI_KHOA };
   const items = itemsTho.map(chuanHoaDongHang);
   const dongLoi = items.find((x) => x.loi);
   if (dongLoi) return { loi: dongLoi.loi };
@@ -230,7 +233,7 @@ function kiemTraPhieuXuat(b, idDangSua) {
 router.post('/', (req, res) => {
   const b = req.body || {};
   const kt = kiemTraPhieuXuat(b);
-  if (kt.loi) return res.status(400).json({ error: kt.loi, chi_tiet: kt.chi_tiet });
+  if (kt.loi) return res.status(kt.status || 400).json({ error: kt.loi, chi_tiet: kt.chi_tiet });
   const tx = db.transaction(() => luuMotPhieuXuat({ ...b, items: kt.items }));
   try {
     const id = tx();
@@ -246,8 +249,10 @@ router.put('/:id', (req, res) => {
   const phieu = db.prepare('SELECT * FROM phieu_xuat WHERE id = ?').get(req.params.id);
   if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu xuất' });
   const b = req.body || {};
+  const khoa = loiKhoaSo('sửa phiếu xuất', phieu.ngay); // phiếu đang thuộc năm đã khóa
+  if (khoa) return res.status(LOI_KHOA).json({ error: khoa });
   const kt = kiemTraPhieuXuat(b, phieu.id);
-  if (kt.loi) return res.status(400).json({ error: kt.loi, chi_tiet: kt.chi_tiet });
+  if (kt.loi) return res.status(kt.status || 400).json({ error: kt.loi, chi_tiet: kt.chi_tiet });
   const tx = db.transaction(() => {
     const dau = dauPhieuXuat(b, kt.items);
     db.prepare(`UPDATE phieu_xuat SET ${Object.keys(dau).map((k) => `${k} = @${k}`).join(', ')}, sua_luc = datetime('now', 'localtime')
@@ -284,6 +289,8 @@ router.post('/phan-bo', (req, res) => {
   if (nhom.length === 0) return res.status(400).json({ error: 'Cần ít nhất 1 nhóm (phiếu xuất) để phân bổ' });
   const phanBo = b.phan_bo || {};
   if (!b.ngay || !ngayHopLe(b.ngay)) return res.status(400).json({ error: 'Ngày xuất không hợp lệ (cần đủ ngày/tháng/năm).' });
+  const khoa = loiKhoaSo('tạo phiếu xuất', b.ngay);
+  if (khoa) return res.status(LOI_KHOA).json({ error: khoa });
   const cacSo = nhom.map((n) => chuanHoaSoPhieu('xuat', n && n.so_phieu)).filter(Boolean);
   if (new Set(cacSo).size < cacSo.length) return res.status(400).json({ error: 'Các nhóm đang trùng số phiếu — mỗi nhóm cần 1 số phiếu khác nhau.' });
   for (const n of nhom) {
@@ -389,6 +396,8 @@ router.put('/:id/so-sach', (req, res) => {
   const b = req.body || {};
   const phieu = db.prepare('SELECT * FROM phieu_xuat WHERE id = ?').get(req.params.id);
   if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu xuất' });
+  const khoa = loiKhoaSo('sửa sổ sách của phiếu xuất', phieu.ngay);
+  if (khoa) return res.status(LOI_KHOA).json({ error: khoa });
 
   if (b.nguon_kinh_phi !== undefined && b.nguon_kinh_phi !== null && String(b.nguon_kinh_phi).trim() !== '' && !laNguonKinhPhiHopLe(b.nguon_kinh_phi)) {
     return res.status(400).json({ error: "nguon_kinh_phi chỉ nhận '661.2' hoặc '337'" });
@@ -440,7 +449,11 @@ router.put('/:id/so-sach', (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM phieu_xuat WHERE id = ?').run(req.params.id);
+  const phieu = db.prepare('SELECT id, ngay FROM phieu_xuat WHERE id = ?').get(req.params.id);
+  if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu xuất' });
+  const khoa = loiKhoaSo('xóa phiếu xuất', phieu.ngay);
+  if (khoa) return res.status(LOI_KHOA).json({ error: khoa });
+  db.prepare('DELETE FROM phieu_xuat WHERE id = ?').run(phieu.id);
   res.json({ ok: true });
 });
 

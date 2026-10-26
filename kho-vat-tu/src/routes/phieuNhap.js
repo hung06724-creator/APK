@@ -7,9 +7,17 @@ const {
   chuanHoaSoPhieu, soSanhSoPhieuGiam, goiYSoPhieuKeTiep, giaTriDaDung, soPhieuTrongNam, timPhieuTrungSo, loiTrungSo,
 } = require('../services/soPhieu');
 const { ngayHopLe, soVN } = require('../services/tienIch');
+const { loiKhoaSo, LOI_KHOA } = require('../services/khoaSo');
 const { chuanHoaNguonKinhPhi, laNguonKinhPhiHopLe, chuoiHoacNull } = require('../services/ghepNhapXuat');
 
 const router = express.Router();
+
+// Ngày của các phiếu xuất đang lấy theo (ghép với) các dòng nhập cho trước — để không gỡ liên kết của phiếu năm đã khóa.
+function ngayXuatGhep(idDongNhap) {
+  if (!idDongNhap.length) return [];
+  return db.prepare(`SELECT DISTINCT px.ngay FROM phieu_xuat_items i JOIN phieu_xuat px ON px.id = i.phieu_xuat_id
+    WHERE i.phieu_nhap_item_id IN (${idDongNhap.map(() => '?').join(',')})`).all(...idDongNhap).map((r) => r.ngay);
+}
 
 router.get('/', (req, res) => {
   const rows = db
@@ -137,6 +145,8 @@ router.post('/', (req, res) => {
   const b = req.body || {};
   const loi = kiemTraPhieuNhap(b);
   if (loi) return res.status(400).json({ error: loi });
+  const khoa = loiKhoaSo('thêm phiếu nhập', b.ngay);
+  if (khoa) return res.status(LOI_KHOA).json({ error: khoa });
   const tx = db.transaction(() => {
     const dong = b.items.map(dongNhapDeGhi);
     const dau = { ...dauPhieuNhap(b, dong.reduce((s, r) => s + r.thanh_tien, 0)), nguon_pdf: b.nguon_pdf || null };
@@ -162,6 +172,9 @@ router.put('/:id', (req, res) => {
   const phieu = db.prepare('SELECT * FROM phieu_nhap WHERE id = ?').get(req.params.id);
   if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu nhập' });
   const b = req.body || {};
+  // Không sửa phiếu thuộc năm đã khóa, cũng không chuyển phiếu sang năm đã khóa.
+  const khoa = loiKhoaSo('sửa phiếu nhập', phieu.ngay, b.ngay);
+  if (khoa) return res.status(LOI_KHOA).json({ error: khoa });
   const loi = kiemTraPhieuNhap(b, phieu.id);
   if (loi) return res.status(400).json({ error: loi });
 
@@ -171,6 +184,9 @@ router.put('/:id', (req, res) => {
   const idLa = idGui.find((i) => !cuTheoId.has(i));
   if (idLa !== undefined) return res.status(400).json({ error: `Dòng hàng id=${idLa} không thuộc phiếu này — mở lại phiếu rồi sửa lại` });
   if (new Set(idGui).size < idGui.length) return res.status(400).json({ error: 'Một dòng hàng bị gửi 2 lần' });
+  // Bỏ dòng mà phiếu xuất năm đã khóa đang lấy theo thì phải gỡ liên kết ở phiếu xuất đó — làm đổi sổ năm đã khóa.
+  const khoaGhep = loiKhoaSo('bỏ dòng nhập mà phiếu xuất lấy theo', ngayXuatGhep(cu.filter((x) => !idGui.includes(x.id)).map((x) => x.id)));
+  if (khoaGhep) return res.status(LOI_KHOA).json({ error: khoaGhep });
 
   // Dòng đã có phiếu xuất lấy theo: không giảm dưới số đã xuất, không đổi sang vật tư khác.
   const daXuatTheoDong = db.prepare('SELECT COALESCE(SUM(sl_thuc_xuat), 0) AS sl FROM phieu_xuat_items WHERE phieu_nhap_item_id = ?');
@@ -246,6 +262,8 @@ router.put('/:id/so-sach', (req, res) => {
   const b = req.body || {};
   const phieu = db.prepare('SELECT * FROM phieu_nhap WHERE id = ?').get(req.params.id);
   if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu nhập' });
+  const khoa = loiKhoaSo('sửa sổ sách của phiếu nhập', phieu.ngay);
+  if (khoa) return res.status(LOI_KHOA).json({ error: khoa });
 
   if (b.nguon_kinh_phi !== undefined && b.nguon_kinh_phi !== null && String(b.nguon_kinh_phi).trim() !== '' && !laNguonKinhPhiHopLe(b.nguon_kinh_phi)) {
     return res.status(400).json({ error: "nguon_kinh_phi chỉ nhận '661.2' hoặc '337'" });
@@ -285,6 +303,11 @@ router.put('/:id/so-sach', (req, res) => {
 
 // Không cho xóa phiếu nhập nếu hàng của phiếu đó đã xuất đi một phần/toàn bộ — xóa sẽ làm tồn kho âm.
 router.delete('/:id', (req, res) => {
+  const phieu = db.prepare('SELECT id, ngay FROM phieu_nhap WHERE id = ?').get(req.params.id);
+  if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu nhập' });
+  const idDong = db.prepare('SELECT id FROM phieu_nhap_items WHERE phieu_nhap_id = ?').all(phieu.id).map((r) => r.id);
+  const khoa = loiKhoaSo('xóa phiếu nhập', phieu.ngay) || loiKhoaSo('xóa phiếu nhập mà phiếu xuất lấy theo', ngayXuatGhep(idDong));
+  if (khoa) return res.status(LOI_KHOA).json({ error: khoa });
   const items = db.prepare('SELECT vat_tu_id, SUM(sl_thuc_nhap) AS sl FROM phieu_nhap_items WHERE phieu_nhap_id = ? AND vat_tu_id IS NOT NULL GROUP BY vat_tu_id').all(req.params.id);
   const thieuHut = [];
   for (const it of items) {

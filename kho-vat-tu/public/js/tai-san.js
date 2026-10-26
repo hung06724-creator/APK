@@ -501,10 +501,13 @@ async function tsMoForm(tab, id) {
       </details>`;
   }
 
+  // Ghi tăng trong năm đã khóa sổ: các số liệu tài chính chỉ xem (máy chủ cũng chặn).
+  const khoaTaiChinh = sua && namBiKhoa(cu.ngay_ghi_tang);
+  const khoaXoa = khoaTaiChinh || (sua && cu.tinh_trang === 'da_giam' && namBiKhoa(cu.ngay_giam)); // máy chủ cũng bỏ qua khi xóa
   const goc = moDialog(
     sua ? esc(v.ten) : esc(ch.nutThem),
     sua ? esc(`${v.ma_tai_san} · ${v.truong || ''}`) : 'Điền thông tin tài sản mới. Mã để trống sẽ tự đánh số.',
-    `${phanThem}
+    `${khoaTaiChinh ? `<div class="ui-note khoa-so"><i class="fas fa-lock"></i><span>Năm ${namCuaNgay(cu.ngay_ghi_tang)} đã khóa sổ: không sửa được nguyên giá, số lượng, ngày, thời gian sử dụng, hao mòn và trường của tài sản ghi tăng trong năm đó.</span></div>` : ''}${phanThem}
      <div class="ui-form-grid">
        ${tsTruong('Trường / đơn vị gốc', 'truong', v.truong || goiY.truong_mac_dinh, 'list="tsf-dl-truong" autocomplete="off"', 'span-3')}
        ${tsTruong('Mã tài sản', 'ma', v.ma_tai_san, 'placeholder="Tự đánh số"')}
@@ -535,17 +538,24 @@ async function tsMoForm(tab, id) {
      <div id="tsf-loi" class="ui-note danger" style="display:none"></div>`,
     `${sua ? `<span class="ts-chan-trai">
         ${v.tinh_trang === 'da_giam' ? '' : '<button class="btn btn-neutral" type="button" id="tsf-giam"><i class="fas fa-circle-minus"></i> Ghi giảm</button>'}
-        <button class="btn btn-danger" type="button" id="tsf-xoa"><i class="fas fa-trash"></i> Xóa</button>
+        ${khoaXoa ? '' : '<button class="btn btn-danger" type="button" id="tsf-xoa"><i class="fas fa-trash"></i> Xóa</button>'}
       </span>` : ''}
      <button class="btn btn-neutral" type="button" data-dong>Đóng</button>
      <button class="btn btn-primary" type="button" id="tsf-luu"><i class="fas fa-floppy-disk"></i> Lưu</button>`
   );
   document.getElementById('tsf-nguon').value = v.nguon_kinh_phi === '337' ? '337' : '661.2';
+  if (khoaTaiChinh) {
+    ['tsf-truong', 'tsf-so-luong', 'tsf-don-gia', 'tsf-ngay-ghi-tang', 'tsf-ngay-su-dung', 'tsf-so-nam', 'tsf-hm-dau', 'tsf-ngay-chot'].forEach((idO) => {
+      const el = document.getElementById(idO);
+      if (el) { el.disabled = true; el.title = 'Năm ghi tăng đã khóa sổ'; }
+    });
+  }
   if (sua) {
     document.getElementById('tsf-tinh-trang').value = v.tinh_trang;
     const nutGiam = document.getElementById('tsf-giam');
     if (nutGiam) nutGiam.addEventListener('click', () => tsHangLoat(tab, 'ghi_giam', [id], () => tsMoForm(tab, id)));
-    document.getElementById('tsf-xoa').addEventListener('click', () => tsHangLoat(tab, 'xoa', [id], () => tsMoForm(tab, id)));
+    const nutXoa = document.getElementById('tsf-xoa');
+    if (nutXoa) nutXoa.addEventListener('click', () => tsHangLoat(tab, 'xoa', [id], () => tsMoForm(tab, id)));
   }
 
   // Gợi ý trực tiếp: hao mòn dự kiến (TSCĐ) + cảnh báo phân loại theo giá trị.

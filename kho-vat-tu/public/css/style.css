@@ -494,3 +494,17 @@ table.ui-table tbody tr.dong-bam:focus-visible { outline: 2px solid var(--primar
 /* Dải báo đang sửa phiếu đã lưu (form tạo phiếu ở chế độ sửa) */
 .ui-note.sua-phieu { align-items: center; margin-bottom: 14px; background: var(--primary-light); color: var(--primary-dark); border: 1px solid var(--border-strong); }
 .ui-note.sua-phieu .btn { margin-left: auto; flex: none; }
+/* Khóa sổ theo năm */
+.ui-khoa { color: var(--danger); font-size: 11px; }
+.ui-note.khoa-so { background: var(--btn-neutral-hover); color: var(--text-main); border: 1px solid var(--border-strong); }
+.ui-note.khoa-so i { color: var(--danger); }
+.ks-khac { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-muted); }
+.ks-khac .ui-input { width: 110px; }
+.ks-canh-bao { color: var(--btn-warning-text); }
+table.ks-bang tr.ks-da-khoa td { background: var(--surface-soft); }
+.ui-pill i { font-size: 10px; }
+table.ks-bang th { white-space: normal; vertical-align: bottom; }
+table.ks-bang th.num { min-width: 60px; }
+table.ks-bang .ds-sub { max-width: 240px; margin-top: 2px; }
+.ks-luc { white-space: nowrap; }
+.ui-input:disabled { background: var(--surface-soft); color: var(--text-muted); cursor: not-allowed; }

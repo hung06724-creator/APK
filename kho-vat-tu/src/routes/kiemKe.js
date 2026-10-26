@@ -5,6 +5,7 @@ const { headerTaiFile } = require('../services/tenFile');
 const { chuoi, ngayHopLe, boSung, ghiLichSu, TRUONG_MAC_DINH } = require('../services/taiSanDungChung');
 const { xuatBienBanKiemKe } = require('../services/xuatKiemKe');
 const { soSanhVi } = require('../services/tienIch');
+const { loiKhoaSo, LOI_KHOA } = require('../services/khoaSo');
 
 const router = express.Router();
 const KET_QUA = ['co', 'khong_thay', 'hong'];
@@ -18,9 +19,14 @@ const DEM = `
   (SELECT COUNT(*) FROM kiem_ke_dong d WHERE d.kiem_ke_id = k.id AND d.ket_qua = 'khong_thay') AS khong_thay,
   (SELECT COUNT(*) FROM kiem_ke_dong d WHERE d.kiem_ke_id = k.id AND d.ket_qua = 'hong') AS hong`;
 const layDot = (id) => db.prepare(`SELECT k.*, ${DEM} FROM kiem_ke k WHERE k.id = ?`).get(id);
-function canDot(id, choSua) {
+// kiemKhoa: thao tác làm thay đổi đợt -> chặn nếu ngày kiểm kê thuộc năm đã khóa sổ.
+function canDot(id, choSua, kiemKhoa) {
   const k = layDot(id);
   if (!k) throw loi(404, 'Không tìm thấy đợt kiểm kê');
+  if (kiemKhoa) {
+    const khoa = loiKhoaSo('sửa đợt kiểm kê', k.ngay);
+    if (khoa) throw loi(LOI_KHOA, khoa);
+  }
   if (choSua && k.trang_thai === 'da_chot') throw loi(400, 'Đợt kiểm kê đã chốt — mở lại đợt nếu cần sửa kết quả');
   return k;
 }
@@ -39,6 +45,8 @@ router.post('/', boc((req, res) => {
   if (!loai) throw loi(400, 'Loại tài sản không hợp lệ');
   const ngay = chuoi(b.ngay);
   if (!ngay || !ngayHopLe(ngay)) throw loi(400, 'Ngày kiểm kê không hợp lệ');
+  const khoa = loiKhoaSo('tạo đợt kiểm kê', ngay);
+  if (khoa) throw loi(LOI_KHOA, khoa);
   const pham = { truong: chuoi(b.truong), bo_phan: chuoi(b.bo_phan), nhom: chuoi(b.nhom) };
   let rows = db.prepare('SELECT * FROM tai_san').all()
     .filter((r) => loai === 'TAT_CA' || r.loai === loai)
@@ -76,7 +84,7 @@ router.get('/:id', boc((req, res) => {
 }));
 
 router.put('/:id', boc((req, res) => {
-  const k = canDot(req.params.id);
+  const k = canDot(req.params.id, false, true);
   const b = req.body || {};
   const ten = b.ten === undefined ? k.ten : chuoi(b.ten);
   if (!ten) throw loi(400, 'Cần nhập tên đợt kiểm kê');
@@ -87,7 +95,7 @@ router.put('/:id', boc((req, res) => {
 
 // Ghi kết quả cho 1 hoặc nhiều dòng: { ids, ket_qua: 'co'|'khong_thay'|'hong'|null, so_luong_thuc_te?, ghi_chu? }
 router.patch('/:id/dong', boc((req, res) => {
-  const k = canDot(req.params.id, true);
+  const k = canDot(req.params.id, true, true);
   const b = req.body || {};
   const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(Number).filter((n) => n > 0))];
   if (!ids.length) throw loi(400, 'Chưa chọn dòng nào');
@@ -119,7 +127,7 @@ router.patch('/:id/dong', boc((req, res) => {
 
 // Quét / gõ mã tài sản -> đánh dấu "Có" (dòng đang Hỏng thì giữ Hỏng).
 router.post('/:id/quet', boc((req, res) => {
-  const k = canDot(req.params.id, true);
+  const k = canDot(req.params.id, true, true);
   const ma = String((req.body || {}).ma || '').trim();
   if (!ma) throw loi(400, 'Chưa nhập mã');
   // Khớp đúng mã trước; không thấy thì so không phân biệt hoa / thường bằng JS (LOWER của SQLite chỉ đổi chữ ASCII:
@@ -146,7 +154,7 @@ router.post('/:id/quet', boc((req, res) => {
 
 // Chốt đợt: { cap_nhat_hong, ghi_lich_su }
 router.post('/:id/chot', boc((req, res) => {
-  const k = canDot(req.params.id, true);
+  const k = canDot(req.params.id, true, true);
   const b = req.body || {};
   const dong = db.prepare('SELECT * FROM kiem_ke_dong WHERE kiem_ke_id = ? AND ket_qua IS NOT NULL AND tai_san_id IS NOT NULL').all(k.id);
   let doiHong = 0;
@@ -176,13 +184,13 @@ router.post('/:id/chot', boc((req, res) => {
 }));
 
 router.post('/:id/mo-lai', boc((req, res) => {
-  const k = canDot(req.params.id);
+  const k = canDot(req.params.id, false, true);
   db.prepare("UPDATE kiem_ke SET trang_thai = 'dang_kiem', chot_luc = NULL WHERE id = ?").run(k.id);
   res.json(layDot(k.id));
 }));
 
 router.delete('/:id', boc((req, res) => {
-  const k = canDot(req.params.id);
+  const k = canDot(req.params.id, false, true);
   db.prepare('DELETE FROM kiem_ke WHERE id = ?').run(k.id);
   res.json({ ok: true });
 }));

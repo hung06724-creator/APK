@@ -393,6 +393,23 @@ function luuCauHinh(doiTuong) {
   lam();
 })();
 
+// Khóa sổ theo năm (xem src/services/khoaSo.js): năm đã khóa thì mọi nghiệp vụ có ngày trong năm đó chỉ còn xem và
+// xuất báo cáo. khoa_so_lich_su ghi mọi lần khóa / mở khóa (mở khóa phải có lý do).
+db.exec(`
+CREATE TABLE IF NOT EXISTS khoa_so (
+  nam INTEGER PRIMARY KEY,
+  khoa_luc TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  ghi_chu TEXT
+);
+CREATE TABLE IF NOT EXISTS khoa_so_lich_su (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nam INTEGER NOT NULL,
+  hanh_dong TEXT NOT NULL CHECK (hanh_dong IN ('khoa', 'mo')),
+  noi_dung TEXT,
+  luc TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+`);
+
 module.exports = {
   db, TRUONG_MAC_DINH, findOrCreateVatTu, timVatTuTheoTen, khoaTenVatTu, tonKhoTatCa, tonKhoCuaVatTu, layCauHinh, luuCauHinh, saoLuuDb,
 };

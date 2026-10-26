@@ -39,6 +39,7 @@ app.use('/api/tai-san', require('./src/routes/taiSan'));
 app.use('/api/xuat', require('./src/routes/xuatBang'));
 app.use('/api/kiem-ke', require('./src/routes/kiemKe'));
 app.use('/api/ton-dau-ky', require('./src/routes/tonDauKy'));
+app.use('/api/khoa-so', require('./src/routes/khoaSo'));
 // Đường dẫn API không tồn tại: trả JSON (giao diện hiện được thông báo) thay vì trang HTML mặc định của Express.
 app.use('/api', (req, res) => res.status(404).json({ error: 'Chức năng này không có trên máy chủ (đường dẫn API không tồn tại).' }));
 

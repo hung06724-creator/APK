@@ -2,6 +2,23 @@ const express = require('express');
 const { db, layCauHinh } = require('../db');
 const { homNay } = require('../services/haoMon');
 const { chuoiTim, soSanhVi } = require('../services/tienIch');
+const { loiKhoaSo, namKhoaCua, LOI_KHOA } = require('../services/khoaSo');
+// Số liệu tài chính của 1 tài sản: đổi các cột này khi tài sản ghi tăng trong năm đã khóa sổ sẽ làm đổi sổ năm đó.
+const COT_TAI_CHINH = {
+  don_gia: 'nguyên giá', so_luong: 'số lượng', ngay_ghi_tang: 'ngày ghi tăng', ngay_su_dung: 'ngày bắt đầu sử dụng',
+  so_nam_su_dung: 'thời gian sử dụng', hm_luy_ke_ban_dau: 'hao mòn đã có', ngay_chot_hm: 'ngày chốt hao mòn', truong: 'trường',
+};
+const soHoacNull = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
+function cotTaiChinhDoi(cu, moi) {
+  return Object.keys(COT_TAI_CHINH).filter((k) => {
+    if (['don_gia', 'so_luong', 'so_nam_su_dung', 'hm_luy_ke_ban_dau'].includes(k)) {
+      const a = soHoacNull(cu[k]); const b = soHoacNull(moi[k]);
+      return a === null || b === null ? a !== b : Math.abs(a - b) > 0.005;
+    }
+    if (k === 'ngay_su_dung') return (cu.ngay_su_dung || cu.ngay_ghi_tang || '') !== (moi.ngay_su_dung || moi.ngay_ghi_tang || '');
+    return (cu[k] || '') !== (moi[k] || '');
+  });
+}
 const { headerTaiFile } = require('../services/tenFile');
 const { xuatSoChiTietTscd, xuatDanhSachTscd, xuatSoCcdc } = require('../services/xuatTaiSan');
 const { pngQr, trangInTem, excelTem, noiDungQr } = require('../services/temQr');
@@ -215,6 +232,10 @@ router.post('/hang-loat', (req, res) => {
   const d = b.du_lieu || {};
   const ngay = chuoi(d.ngay) || homNay();
   if (!ngayHopLe(ngay)) return res.status(400).json({ error: 'Ngày không hợp lệ' });
+  if (b.hanh_dong !== 'xoa') { // nghiệp vụ ghi theo ngày (điều chuyển, đổi tình trạng, cập nhật, ghi giảm)
+    const khoa = loiKhoaSo('ghi nghiệp vụ tài sản', ngay);
+    if (khoa) return res.status(LOI_KHOA).json({ error: khoa });
+  }
   const rows = db.prepare(`SELECT * FROM tai_san WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids);
   if (rows.length !== ids.length) return res.status(404).json({ error: 'Có tài sản không còn tồn tại, hãy tải lại trang' });
   const ghiChu = chuoi(d.ghi_chu);
@@ -241,6 +262,8 @@ router.post('/hang-loat', (req, res) => {
         if (!TINH_TRANG_HOP_LE.includes(tt) || tt === 'da_giam') throw Object.assign(new Error('Tình trạng không hợp lệ (dùng "Ghi giảm" để ghi giảm)'), { status: 400 });
         for (const r of rows) {
           if (r.tinh_trang === tt) { boQua.push(`${r.ma_tai_san}: đã ở tình trạng này`); continue; }
+          const namGiam = r.tinh_trang === 'da_giam' ? namKhoaCua(r.ngay_giam) : null;
+          if (namGiam) { boQua.push(`${r.ma_tai_san}: ghi giảm trong năm ${namGiam} đã khóa sổ, không khôi phục được`); continue; }
           db.prepare("UPDATE tai_san SET tinh_trang = ?, ngay_giam = NULL, ly_do_giam = NULL, updated_at = datetime('now') WHERE id = ?").run(tt, r.id);
           ghiLichSu(r.id, ngay, r.tinh_trang === 'da_giam' ? 'Khôi phục' : 'Đổi tình trạng',
             `${TINH_TRANG_TEN[r.tinh_trang]} → ${TINH_TRANG_TEN[tt]}` + (ghiChu ? ` (${ghiChu})` : ''));
@@ -263,6 +286,8 @@ router.post('/hang-loat', (req, res) => {
           const doi = Object.keys(moi).filter((k) => String(r[k] ?? '') !== String(moi[k]));
           if (!doi.length) { boQua.push(`${r.ma_tai_san}: không có gì thay đổi`); continue; }
           if (moi.so_nam_su_dung && r.loai !== 'TSCD') { boQua.push(`${r.ma_tai_san}: CCDC không có thời gian sử dụng`); continue; }
+          const namTang = (doi.includes('so_nam_su_dung') || doi.includes('truong')) ? namKhoaCua(r.ngay_ghi_tang) : null;
+          if (namTang) { boQua.push(`${r.ma_tai_san}: ghi tăng năm ${namTang} đã khóa sổ, không đổi thời gian sử dụng / trường`); continue; }
           db.prepare(`UPDATE tai_san SET ${doi.map((k) => `${k} = @${k}`).join(', ')}, updated_at = datetime('now') WHERE id = @id`).run({ ...moi, id: r.id });
           ghiLichSu(r.id, ngay, 'Cập nhật thông tin', doi.map((k) => `${nhan[k]}: ${r[k] ?? '(trống)'} → ${moi[k]}`).join('; '));
           capNhat++;
@@ -278,8 +303,14 @@ router.post('/hang-loat', (req, res) => {
           capNhat++;
         }
       } else if (b.hanh_dong === 'xoa') {
-        const info = db.prepare(`DELETE FROM tai_san WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
-        capNhat = info.changes;
+        // Tài sản ghi tăng / ghi giảm trong năm đã khóa sổ thì không xóa được (sổ năm đó đã chốt).
+        const xoaDuoc = [];
+        for (const r of rows) {
+          const nam = namKhoaCua(r.ngay_ghi_tang, r.tinh_trang === 'da_giam' ? r.ngay_giam : null);
+          if (nam) boQua.push(`${r.ma_tai_san}: có nghiệp vụ trong năm ${nam} đã khóa sổ`);
+          else xoaDuoc.push(r.id);
+        }
+        if (xoaDuoc.length) capNhat = db.prepare(`DELETE FROM tai_san WHERE id IN (${xoaDuoc.map(() => '?').join(',')})`).run(...xoaDuoc).changes;
       } else {
         throw Object.assign(new Error('Thao tác không hợp lệ'), { status: 400 });
       }
@@ -311,6 +342,8 @@ router.post('/', (req, res) => {
   if (!LOAI_HOP_LE.includes(loai)) return res.status(400).json({ error: 'loai phải là TSCD hoặc CCDC' });
   const kq = chuanHoa(loai, b);
   if (kq.loi) return res.status(400).json({ error: kq.loi });
+  const khoa = loiKhoaSo('ghi tăng tài sản', kq.gia_tri.ngay_ghi_tang);
+  if (khoa) return res.status(LOI_KHOA).json({ error: khoa });
   try {
     const id = db.transaction(() => themTaiSan(loai, kq.gia_tri))();
     res.status(201).json(boSung(db.prepare('SELECT * FROM tai_san WHERE id = ?').get(id)));
@@ -340,6 +373,14 @@ router.put('/:id', (req, res) => {
     tinhTrang = b.tinh_trang;
   }
   const homNayStr = homNay();
+  // Năm đã khóa sổ: không đổi số liệu tài chính của tài sản ghi tăng trong năm đó (hay chuyển ngày ghi tăng vào năm đó),
+  // không khôi phục tài sản ghi giảm trong năm đó, không ghi điều chuyển / đổi tình trạng khi năm hiện tại đã khóa.
+  const doiTaiChinh = cotTaiChinhDoi(cu, g);
+  const doiNoiDung = ['bo_phan', 'nguoi_su_dung', 'vi_tri'].some((k) => (cu[k] || '') !== (g[k] || '')) || tinhTrang !== cu.tinh_trang;
+  const khoa = (doiTaiChinh.length && loiKhoaSo(`sửa ${doiTaiChinh.map((k) => COT_TAI_CHINH[k]).join(', ')} của tài sản ghi tăng`, cu.ngay_ghi_tang, g.ngay_ghi_tang))
+    || (cu.tinh_trang === 'da_giam' && tinhTrang !== 'da_giam' && loiKhoaSo('khôi phục tài sản đã ghi giảm', cu.ngay_giam))
+    || (doiNoiDung && loiKhoaSo('ghi điều chuyển hoặc đổi tình trạng tài sản', homNayStr));
+  if (khoa) return res.status(LOI_KHOA).json({ error: khoa });
   try {
     db.transaction(() => {
       db.prepare(
