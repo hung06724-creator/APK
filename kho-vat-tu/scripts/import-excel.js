@@ -69,7 +69,7 @@ function docSheet(ws, laPhieuNhap) {
       ngay: ngayTuChuoiExcel(dongA(rBatDau + 1)),
       so_phieu: layGiaTriSauDauHai(dongG(rBatDau + 2)),
       no_tk: layGiaTriSauDauHai(dongG(rBatDau + 3)),
-      co_tk: laPhieuNhap ? layGiaTriSauDauHai(dongG(rBatDau + 4)) : null,
+      co_tk: layGiaTriSauDauHai(dongG(rBatDau + 4)),
       nguoi: null,
       don_vi: null,
       ly_do: null,
@@ -166,8 +166,16 @@ function docSheet(ws, laPhieuNhap) {
 
     // Ngay sau dòng "Tổng cộng" là dòng "Tổng số tiền (viết bằng chữ)", rồi tới dòng
     // "Số chứng từ gốc kèm theo :" — lấy đúng vị trí thay vì dò chữ, cho cả 2 sheet.
-    const rChungTu = rTim + 2;
-    header.so_chung_tu_goc = layGiaTriSauDauHai(dongA(rChungTu));
+    // Một số phiếu gốc bị xóa mất dòng "Số chứng từ gốc kèm theo" — nếu không dò theo nhãn
+    // sẽ đọc nhầm sang dòng chữ ký ngay phía dưới.
+    let rChungTu = null;
+    for (let q = rTim; q <= Math.min(rTim + 4, rKetThuc); q++) {
+      if (/^Số chứng từ/i.test(dongA(q))) {
+        rChungTu = q;
+        break;
+      }
+    }
+    header.so_chung_tu_goc = rChungTu ? layGiaTriSauDauHai(dongA(rChungTu)) : '';
 
     if (items.length > 0) {
       phieuList.push({ ...header, items, tongTienHang, thueSuat, tienThue, tongCong });

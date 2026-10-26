@@ -29,8 +29,27 @@ document.querySelectorAll('.sidebar .nav-item[data-tab]').forEach((btn) => {
 document.querySelectorAll('[data-goto]').forEach((btn) => {
   btn.addEventListener('click', () => chuyenTab(btn.dataset.goto));
 });
+// Nhóm "Tạo phiếu": phiếu nhập mới, phiếu xuất mới và cấu hình mẫu phiếu dùng chung 1 mục menu + 1 thanh chuyển.
+// Nút "Cấu hình mẫu phiếu" nằm trên thanh của từng loại phiếu và mở đúng mẫu của loại phiếu đó.
+const TAB_TAO_PHIEU = ['tao-nhap', 'tao-xuat', 'cau-hinh-nhap', 'cau-hinh-xuat'];
+document.querySelectorAll('.tao-phieu-bar').forEach((bar) => {
+  const loai = bar.dataset.loai || (bar.closest('.page').id === 'tao-xuat' ? 'xuat' : 'nhap');
+  bar.innerHTML = `
+    <div class="seg">
+      <button type="button" class="seg-item" data-seg="tao-nhap"><i class="fas fa-truck-ramp-box"></i> Phiếu nhập</button>
+      <button type="button" class="seg-item" data-seg="tao-xuat"><i class="fas fa-truck-fast"></i> Phiếu xuất</button>
+    </div>
+    <button type="button" class="btn btn-neutral btn-sm" data-seg-cau-hinh="cau-hinh-${loai}"><i class="fas fa-gear"></i> Cấu hình mẫu phiếu ${loai === 'nhap' ? 'nhập' : 'xuất'}</button>`;
+  bar.querySelectorAll('[data-seg]').forEach((b) => b.addEventListener('click', () => chuyenTab(b.dataset.seg)));
+  bar.querySelector('[data-seg-cau-hinh]').addEventListener('click', (e) => chuyenTab(e.currentTarget.dataset.segCauHinh));
+});
 function chuyenTab(tab) {
-  document.querySelectorAll('.sidebar .nav-item[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.sidebar .nav-item[data-tab]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.nhom === 'tao-phieu' ? TAB_TAO_PHIEU.includes(tab) : b.dataset.tab === tab);
+  });
+  const loaiDangMo = tab.endsWith('-xuat') ? 'xuat' : 'nhap';
+  document.querySelectorAll('.tao-phieu-bar [data-seg]').forEach((b) => b.classList.toggle('active', b.dataset.seg === `tao-${loaiDangMo}`));
+  document.querySelectorAll('.tao-phieu-bar [data-seg-cau-hinh]').forEach((b) => b.classList.toggle('active', b.dataset.segCauHinh === tab));
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === tab));
   if (tab === 'ton-kho') taiTonKho();
   if (tab === 'phieu-nhap') taiDanhSachPhieuNhap();
@@ -40,7 +59,8 @@ function chuyenTab(tab) {
     taiDanhSachPhieuNhapChoChon('px-chon-phieu-nhap');
   }
   if (tab === 'tach-xuat') taiDanhSachPhieuNhapChoChon('tx-phieu-nhap');
-  if (tab === 'cau-hinh') taiCauHinh();
+  if (tab === 'cau-hinh-nhap') taiCauHinh('nhap');
+  if (tab === 'cau-hinh-xuat') taiCauHinh('xuat');
 }
 
 // ===== TỒN KHO =====
@@ -92,7 +112,11 @@ async function taiDanhSachPhieuNhap() {
   tbody.querySelectorAll('[data-xoa-nhap]').forEach((btn) =>
     btn.addEventListener('click', async () => {
       if (!confirm('Xóa phiếu nhập này? Tồn kho sẽ giảm tương ứng.')) return;
-      await goiApi('/api/phieu-nhap/' + btn.dataset.xoaNhap, { method: 'DELETE' });
+      try {
+        await goiApi('/api/phieu-nhap/' + btn.dataset.xoaNhap, { method: 'DELETE' });
+      } catch (err) {
+        alert(err.message);
+      }
       taiDanhSachPhieuNhap();
     })
   );
@@ -121,7 +145,11 @@ async function taiDanhSachPhieuXuat() {
   tbody.querySelectorAll('[data-xoa-xuat]').forEach((btn) =>
     btn.addEventListener('click', async () => {
       if (!confirm('Xóa phiếu xuất này? Tồn kho sẽ tăng lại tương ứng.')) return;
-      await goiApi('/api/phieu-xuat/' + btn.dataset.xoaXuat, { method: 'DELETE' });
+      try {
+        await goiApi('/api/phieu-xuat/' + btn.dataset.xoaXuat, { method: 'DELETE' });
+      } catch (err) {
+        alert(err.message);
+      }
       taiDanhSachPhieuXuat();
     })
   );
@@ -640,40 +668,177 @@ veNhomList();
 veBangPhanBo();
 
 // ===== CẤU HÌNH MẪU PHIẾU =====
-async function taiCauHinh() {
-  const ch = await goiApi('/api/cau-hinh');
-  document.getElementById('ch-ten-don-vi').value = ch.ten_don_vi || '';
-  document.getElementById('ch-bo-phan').value = ch.bo_phan || '';
-  document.getElementById('ch-ghi-chu-tt').value = ch.ghi_chu_thong_tu || '';
-  document.getElementById('ch-ghi-chu-tt-2').value = ch.ghi_chu_thong_tu_2 || '';
-  document.getElementById('ch-nguoi-ky-nhap').value = ch.nguoi_ky_nhap || '';
-  document.getElementById('ch-ten-nguoi-ky-nhap').value = ch.ten_nguoi_ky_nhap || '';
-  document.getElementById('ch-nguoi-ky-xuat').value = ch.nguoi_ky_xuat || '';
-  document.getElementById('ch-ten-nguoi-ky-xuat').value = ch.ten_nguoi_ky_xuat || '';
+// Mỗi loại phiếu có 1 màn riêng, vẽ lại mẫu Excel (Mẫu số 01-VT / 02-VT) để người dùng thấy
+// ô nào sẽ in ở đâu: ô vàng = điền cấu hình ngay tại chỗ, chữ xám = tự điền khi tạo phiếu.
+const DO_RONG_MAU = {
+  nhap: [3.33, 27.66, 5.11, 4.55, 5.66, 4.89, 9.11, 9.55, 8.22],
+  xuat: [4, 25.66, 5.11, 6.33, 6.78, 6.55, 7.66, 9.33, 10.78],
+};
+const CH_SO_NGUOI_KY_TOI_DA = 9; // mẫu có 9 cột A..I, mỗi người ký chiếm ít nhất 1 cột
+const chNguoiKy = { nhap: [], xuat: [] }; // [{ chucDanh, ten }]
+
+function tachDanhSachCsv(csv) {
+  return String(csv || '').split(',').map((s) => s.trim());
 }
 
-document.getElementById('ch-luu').addEventListener('click', async () => {
-  const ketQuaEl = document.getElementById('ch-ket-qua');
-  const body = {
-    ten_don_vi: document.getElementById('ch-ten-don-vi').value.trim(),
-    bo_phan: document.getElementById('ch-bo-phan').value.trim(),
-    ghi_chu_thong_tu: document.getElementById('ch-ghi-chu-tt').value.trim(),
-    ghi_chu_thong_tu_2: document.getElementById('ch-ghi-chu-tt-2').value.trim(),
-    nguoi_ky_nhap: document.getElementById('ch-nguoi-ky-nhap').value.trim(),
-    ten_nguoi_ky_nhap: document.getElementById('ch-ten-nguoi-ky-nhap').value.trim(),
-    nguoi_ky_xuat: document.getElementById('ch-nguoi-ky-xuat').value.trim(),
-    ten_nguoi_ky_xuat: document.getElementById('ch-ten-nguoi-ky-xuat').value.trim(),
+function veMauPhieu(loai) {
+  const laNhap = loai === 'nhap';
+  const doRong = DO_RONG_MAU[loai];
+  const tongRong = doRong.reduce((a, b) => a + b, 0);
+  const phanTram = (w) => ((w / tongRong) * 100).toFixed(2);
+  let soDong = 0;
+  // cells: [{ span, html, cls }]; ô thiếu = để trống cho đủ 9 cột
+  const dong = (cells, cao) => {
+    soDong++;
+    let dem = 0;
+    const html = cells.map((c) => {
+      const span = c.span || 1;
+      dem += span;
+      return `<td colspan="${span}"${c.rowspan ? ` rowspan="${c.rowspan}"` : ''} class="${c.cls || ''}">${c.html ?? ''}</td>`;
+    }).join('');
+    const bu = dem < 9 ? `<td colspan="${9 - dem}"></td>` : '';
+    return `<tr${cao ? ` style="height:${cao}px"` : ''}><th class="xl-so-dong">${soDong}</th>${html}${bu}</tr>`;
   };
+  const xam = (text) => `<span class="xl-xam">${text}</span>`;
+  const nhap = (khoa, placeholder, extra = '') => `<input class="xl-nhap ${extra}" data-ch="${khoa}" placeholder="${placeholder}" />`;
+
+  const dongHang = (stt) => dong([
+    { html: xam(stt), cls: 'xl-giua xl-vien' },
+    { html: xam('Tên vật tư, hàng hóa'), cls: 'xl-vien' },
+    { html: xam(''), cls: 'xl-vien' }, { html: xam('ĐVT'), cls: 'xl-giua xl-vien' },
+    { html: xam('0'), cls: 'xl-giua xl-vien' }, { html: xam('0'), cls: 'xl-giua xl-vien' },
+    { html: xam('0,00'), cls: 'xl-phai xl-vien' }, { html: xam('0'), cls: 'xl-phai xl-vien' }, { html: '', cls: 'xl-vien' },
+  ]);
+
+  const phan1 = [
+    dong([
+      { span: 4, html: `<div class="xl-nhan-nhap"><span>Đơn vị:</span>${nhap('ten_don_vi', 'Tên đơn vị')}</div>`, cls: 'xl-dam xl-cau-hinh' },
+      { span: 5, html: `Mẫu số ${laNhap ? '01' : '02'}-VT`, cls: 'xl-giua xl-dam xl-co-12' },
+    ]),
+    dong([
+      { span: 4, html: `<div class="xl-nhan-nhap"><span>Bộ phận:</span>${nhap('bo_phan', 'Bộ phận')}</div>`, cls: 'xl-dam xl-cau-hinh' },
+      { span: 5, html: nhap('ghi_chu_thong_tu', '( Kèm theo Thông tư ...', 'xl-giua xl-in-nghieng'), cls: 'xl-cau-hinh' },
+    ]),
+    dong([
+      { span: 4, html: '' },
+      { span: 5, html: nhap('ghi_chu_thong_tu_2', 'ngày ... của Bộ trưởng Bộ Tài chính', 'xl-giua xl-in-nghieng'), cls: 'xl-cau-hinh' },
+    ]),
+    dong([{ span: 9, html: laNhap ? 'PHIẾU NHẬP KHO' : 'PHIẾU XUẤT KHO', cls: 'xl-giua xl-dam xl-tieu-de' }], 34),
+    dong([{ span: 9, html: xam('Ngày ….. tháng ….. năm ……..'), cls: 'xl-giua xl-in-nghieng' }]),
+    dong([{ span: 6, html: '' }, { span: 3, html: xam(`Số: ${laNhap ? 'PN' : 'PX'} 01`), cls: 'xl-dam' }]),
+    dong([{ span: 6, html: '' }, { span: 3, html: xam('Nợ : ………'), cls: 'xl-dam' }]),
+    dong([{ span: 6, html: '' }, { span: 3, html: xam('Có : ………'), cls: 'xl-dam' }]),
+    dong([{ span: 9, html: xam(`Họ và tên ${laNhap ? 'người nhập' : 'người nhận'}: ………………………   Đơn vị : ………………………`) }]),
+    dong([{ span: 9, html: xam(laNhap ? 'Theo ……… số ……… ngày ……… của ………' : 'Lý do xuất kho : ………………………'), cls: laNhap ? 'xl-giua' : '' }]),
+    dong([
+      { span: 6, html: xam(`${laNhap ? 'Nhập' : 'Xuất'} tại kho: ………………………`) },
+      { span: 2, html: xam('Địa điểm ……'), cls: 'xl-giua xl-gach-chan' },
+      { span: 1, html: '' },
+    ]),
+  ];
+
+  const tieuDeBang = `
+    <tr style="height:20px"><th class="xl-so-dong">${++soDong}</th>
+      <td rowspan="2" class="xl-th">STT</td><td rowspan="2" class="xl-th">Tên, nhãn hiệu, quy cách, phẩm chất vật tư, dụng cụ, sp, hàng hoá</td>
+      <td rowspan="2" class="xl-th">Mã số</td><td rowspan="2" class="xl-th">ĐVT</td>
+      <td colspan="2" class="xl-th">Số lượng</td>
+      <td rowspan="2" class="xl-th">Đơn giá</td><td rowspan="2" class="xl-th">Thành tiền</td><td rowspan="2" class="xl-th">Ghi chú</td></tr>
+    <tr style="height:34px"><th class="xl-so-dong">${++soDong}</th>
+      <td class="xl-th">${laNhap ? 'Theo chứng từ' : 'Yêu cầu'}</td><td class="xl-th">${laNhap ? 'Thực nhập' : 'Thực xuất'}</td></tr>
+    <tr><th class="xl-so-dong">${++soDong}</th>${['A', 'B', 'C', 'D', 1, 2, 3, 4, 5].map((t) => `<td class="xl-th xl-chi-so">${t}</td>`).join('')}</tr>`;
+
+  const phan2 = [
+    dongHang(1),
+    dongHang(2),
+    dong([{ html: '', cls: 'xl-vien' }, { html: 'Tổng', cls: 'xl-dam xl-vien' }, { span: 5, html: '', cls: 'xl-vien' }, { html: xam('0'), cls: 'xl-giua xl-dam xl-vien' }, { html: '', cls: 'xl-vien' }]),
+    dong([{ html: '', cls: 'xl-vien' }, { html: xam('Thuế … %'), cls: 'xl-dam xl-vien' }, { span: 5, html: '', cls: 'xl-vien' }, { html: xam('0'), cls: 'xl-giua xl-dam xl-vien' }, { html: '', cls: 'xl-vien' }]),
+    dong([{ html: '', cls: 'xl-vien' }, { html: 'Tổng cộng', cls: 'xl-dam xl-vien' }, { span: 5, html: '', cls: 'xl-vien' }, { html: xam('0'), cls: 'xl-giua xl-dam xl-vien' }, { html: '', cls: 'xl-vien' }]),
+    dong([{ span: 9, html: xam('Tổng số tiền (viết bằng chữ) : ……………………………………………………………………./.'), cls: 'xl-dam xl-in-nghieng' }]),
+    dong([{ span: 9, html: xam('Số chứng từ gốc kèm theo : ……………………………………'), cls: 'xl-dam' }]),
+  ];
+  const dongBatDauChuKy = soDong + 1;
+
+  const cot = `<col style="width:34px">${doRong.map((w) => `<col style="width:${phanTram(w)}%">`).join('')}`;
+  const chuCai = `<tr><th class="xl-goc"></th>${'ABCDEFGHI'.split('').map((c) => `<th class="xl-cot">${c}</th>`).join('')}</tr>`;
+  const ghiChu = `<div class="xl-chu-giai"><span><i class="xl-o-mau vang"></i> Ô điền cấu hình (lưu cho mọi phiếu ${laNhap ? 'nhập' : 'xuất'} sau này)</span><span><i class="xl-o-mau xam"></i> Tự điền khi tạo phiếu</span><span class="xl-luu-y">Tên đơn vị, Bộ phận và dòng "Kèm theo Thông tư" dùng chung cho cả phiếu nhập và phiếu xuất.</span></div>`;
+
+  document.getElementById(`xl-${loai}`).innerHTML = `${ghiChu}
+    <table class="xl"><colgroup>${cot}</colgroup><thead>${chuCai}</thead>
+      <tbody>${phan1.join('')}${tieuDeBang}${phan2.join('')}</tbody>
+      <tbody id="xl-ky-${loai}" data-dong-bat-dau="${dongBatDauChuKy}"></tbody>
+    </table>`;
+  veChuKy(loai);
+}
+
+// Mỗi người ký chiếm 1 cụm cột riêng, chia đều 9 cột A..I — đúng cách xuất Excel đang chia.
+function veChuKy(loai) {
+  const tbody = document.getElementById(`xl-ky-${loai}`);
+  const ds = chNguoiKy[loai];
+  const batDau = Number(tbody.dataset.dongBatDau);
+  const cacCot = ds.map((_, i) => {
+    const start = Math.floor((i * 9) / ds.length) + 1;
+    const end = Math.max(start, Math.floor(((i + 1) * 9) / ds.length));
+    return end - start + 1;
+  });
+  const hang = (n, noiDung, cao) => `<tr${cao ? ` style="height:${cao}px"` : ''}><th class="xl-so-dong">${n}</th>${noiDung}</tr>`;
+  const khung = (render) => ds.map((nk, i) => `<td colspan="${cacCot[i]}" class="xl-giua xl-cau-hinh">${render(nk, i)}</td>`).join('');
+
+  tbody.innerHTML =
+    hang(batDau, khung((nk, i) => `<div class="xl-ky-o"><textarea rows="2" class="xl-nhap xl-giua xl-dam" data-ky="chucDanh" data-i="${i}" placeholder="Chức danh"></textarea><button type="button" class="xl-xoa" data-xoa="${i}" title="Bỏ người ký này"><i class="fas fa-xmark"></i></button></div>`), 44) +
+    hang(batDau + 1, khung(() => '<span class="xl-xam xl-in-nghieng">( Ký , họ tên)</span>'), 40) +
+    hang(batDau + 2, khung((nk, i) => `<textarea rows="2" class="xl-nhap xl-giua xl-dam" data-ky="ten" data-i="${i}" placeholder="Họ tên (có thể để trống)"></textarea>`), 44) +
+    hang(batDau + 3, `<td colspan="9" class="xl-them-ky"><button type="button" class="btn btn-neutral btn-sm" data-them-ky ${ds.length >= CH_SO_NGUOI_KY_TOI_DA ? 'disabled' : ''}><i class="fas fa-plus"></i> Thêm người ký</button></td>`);
+
+  tbody.querySelectorAll('[data-ky]').forEach((inp) => {
+    const nk = ds[Number(inp.dataset.i)];
+    inp.value = nk[inp.dataset.ky];
+    inp.addEventListener('input', () => { nk[inp.dataset.ky] = inp.value; });
+  });
+  tbody.querySelectorAll('[data-xoa]').forEach((b) => b.addEventListener('click', () => {
+    ds.splice(Number(b.dataset.xoa), 1);
+    veChuKy(loai);
+  }));
+  tbody.querySelector('[data-them-ky]').addEventListener('click', () => {
+    ds.push({ chucDanh: '', ten: '' });
+    veChuKy(loai);
+    tbody.querySelector(`[data-ky="chucDanh"][data-i="${ds.length - 1}"]`).focus();
+  });
+}
+
+async function taiCauHinh(loai) {
+  const ch = await goiApi('/api/cau-hinh');
+  const goc = document.getElementById(`xl-${loai}`);
+  const chucDanh = tachDanhSachCsv(ch[`nguoi_ky_${loai}`]).filter(Boolean);
+  const ten = tachDanhSachCsv(ch[`ten_nguoi_ky_${loai}`]);
+  chNguoiKy[loai] = chucDanh.map((cd, i) => ({ chucDanh: cd, ten: ten[i] || '' }));
+  veMauPhieu(loai);
+  const mau = document.getElementById(`xl-${loai}`);
+  mau.querySelectorAll('[data-ch]').forEach((inp) => { inp.value = ch[inp.dataset.ch] || ''; });
+  const ketQuaEl = goc.closest('.page').querySelector('.ch-ket-qua');
+  ketQuaEl.style.display = 'none';
+}
+
+document.querySelectorAll('.ch-luu').forEach((nut) => nut.addEventListener('click', async () => {
+  const loai = nut.dataset.loai;
+  const mau = document.getElementById(`xl-${loai}`);
+  const ketQuaEl = mau.closest('.page').querySelector('.ch-ket-qua');
+  const nguoiKy = chNguoiKy[loai].filter((nk) => nk.chucDanh.trim());
+  const sach = (s) => s.replace(/,/g, ' ').trim(); // dấu phẩy là ký tự phân tách khi lưu
+  const body = {
+    [`nguoi_ky_${loai}`]: nguoiKy.map((nk) => sach(nk.chucDanh)).join(', '),
+    [`ten_nguoi_ky_${loai}`]: nguoiKy.some((nk) => nk.ten.trim()) ? nguoiKy.map((nk) => sach(nk.ten)).join(', ') : '',
+  };
+  mau.querySelectorAll('[data-ch]').forEach((inp) => { body[inp.dataset.ch] = inp.value.trim(); });
   try {
     await goiApi('/api/cau-hinh', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    ketQuaEl.innerHTML = '<i class="fas fa-circle-check"></i><span>Đã lưu cấu hình. Các phiếu xuất Excel tiếp theo sẽ dùng thông tin này.</span>';
-    ketQuaEl.style.display = 'flex';
+    ketQuaEl.className = 'ui-note ch-ket-qua';
+    ketQuaEl.innerHTML = `<i class="fas fa-circle-check"></i><span>Đã lưu cấu hình. Các phiếu ${loai === 'nhap' ? 'nhập' : 'xuất'} xuất Excel tiếp theo sẽ dùng thông tin này.</span>`;
   } catch (err) {
-    ketQuaEl.className = 'ui-note danger';
+    ketQuaEl.className = 'ui-note danger ch-ket-qua';
     ketQuaEl.innerHTML = `<i class="fas fa-triangle-exclamation"></i><span>${err.message}</span>`;
-    ketQuaEl.style.display = 'flex';
   }
-});
+  ketQuaEl.style.display = 'flex';
+}));
 
 // ===== Khởi động =====
 veBangDongNhap();

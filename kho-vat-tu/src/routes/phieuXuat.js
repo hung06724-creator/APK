@@ -123,6 +123,10 @@ router.post('/', (req, res) => {
   const itemsTho = Array.isArray(b.items) ? b.items : [];
   if (itemsTho.length === 0) return res.status(400).json({ error: 'Phiếu xuất cần ít nhất 1 dòng hàng hóa' });
 
+  // Số lượng âm sẽ làm TĂNG tồn kho thay vì trừ — chặn từ đầu.
+  const dongAm = itemsTho.filter((it) => (Number(it.sl_thuc_xuat) || 0) < 0 || (Number(it.don_gia) || 0) < 0);
+  if (dongAm.length > 0) return res.status(400).json({ error: 'Số lượng và đơn giá không được âm' });
+
   const items = itemsTho.map(chuanHoaDongHang);
   const thieuHut = kiemTraTonKho(items);
   if (thieuHut.length > 0) {

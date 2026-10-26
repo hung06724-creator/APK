@@ -1,6 +1,6 @@
 /* Giao diện dùng chung ngôn ngữ thiết kế với phần mềm Bảng lương / CSP của HNIVC:
    cùng bảng màu xanh lục đậm, cùng nút/.btn, thẻ/.ui-card, bảng/.ui-table, nhãn/.ui-pill.
-   Theo đúng mục 8 "Quy ước khi viết thêm giao diện": chỉ dùng token + lớp ui-*/btn-*. */
+   Theo đúng mục 8 "Quy ước khi viết thêm giao diện": chỉ dùng token + lớp ui-* và btn-*. */
 
 :root {
   --primary: #2f6b5f;
@@ -91,6 +91,14 @@ body {
 .ui-head h1 { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -.025em; }
 .ui-head p { margin: 4px 0 0; font-size: 13px; color: var(--text-muted); }
 .ui-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Thanh chuyển trong nhóm "Tạo phiếu" */
+.tao-phieu-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--primary-light); border: 1px solid var(--border-strong); border-radius: 10px; }
+.seg-item { border: none; background: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; color: var(--btn-secondary-text); padding: 6px 14px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; transition: all .15s ease; }
+.seg-item:hover { background: var(--btn-secondary-hover); }
+.seg-item.active { background: var(--primary); color: #fff; box-shadow: var(--shadow-sm); }
+.tao-phieu-bar .btn.active { background: var(--btn-secondary-bg); border-color: var(--primary); color: var(--primary-dark); }
 
 /* ===== Thẻ ===== */
 .ui-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; }
@@ -196,3 +204,43 @@ table.ui-table tbody tr.is-danger td { background: var(--btn-danger-bg); }
 @media (max-width: 768px) {
   .main { padding: 18px; }
 }
+
+/* ===== Mẫu phiếu dạng Excel (màn cấu hình) ===== */
+.xl-scroll { overflow-x: auto; padding: 16px; }
+.xl-mau { min-width: 760px; max-width: 980px; margin: 0 auto; }
+.xl-chu-giai { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+.xl-chu-giai span { display: inline-flex; align-items: center; gap: 6px; }
+.xl-chu-giai .xl-luu-y { flex-basis: 100%; }
+.xl-o-mau { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--border-strong); border-radius: 2px; }
+.xl-o-mau.vang, .xl-chu-thich-vang { background: #fff4b8; }
+.xl-chu-thich-vang { padding: 0 4px; border-radius: 3px; color: var(--text-main); }
+.xl-o-mau.xam { background: #fff; }
+table.xl { width: 100%; table-layout: fixed; border-collapse: collapse; background: #fff; font-family: 'Times New Roman', Times, serif; font-size: 13px; line-height: 1.35; color: #000; }
+table.xl td, table.xl th { border: 1px solid #e1e4e2; padding: 2px 5px; overflow: hidden; vertical-align: middle; height: 24px; }
+table.xl .xl-goc, table.xl .xl-cot, table.xl .xl-so-dong { background: #f1f3f2; color: #5b6560; font: 600 11px var(--font-ui); text-align: center; padding: 0; }
+table.xl .xl-th { text-align: center; font-weight: 700; border-color: #222; background: #fff; }
+table.xl .xl-chi-so { font-weight: 400; }
+table.xl .xl-vien { border-color: #222; }
+table.xl .xl-giua { text-align: center; }
+table.xl .xl-phai { text-align: right; }
+table.xl .xl-dam { font-weight: 700; }
+table.xl .xl-co-12 { font-size: 14px; }
+table.xl .xl-in-nghieng { font-style: italic; }
+table.xl .xl-tieu-de { font-size: 22px; letter-spacing: .02em; }
+table.xl .xl-gach-chan { border-bottom-color: #222; }
+.xl-xam { color: #9aa39f; font-weight: 400; }
+table.xl .xl-cau-hinh { background: #fff4b8; box-shadow: inset 0 0 0 1px #e4cf6a; }
+.xl-nhap { width: 100%; border: none; background: transparent; font: inherit; color: #000; padding: 1px 2px; outline: none; }
+.xl-nhap::placeholder { color: #a8923a; font-weight: 400; font-style: italic; }
+.xl-nhap:focus { background: #fff; box-shadow: 0 0 0 2px var(--primary); border-radius: 2px; }
+.xl-nhap.xl-giua { text-align: center; }
+.xl-nhap.xl-dam { font-weight: 700; }
+.xl-nhap.xl-in-nghieng { font-style: italic; }
+td.xl-cau-hinh:has(> .xl-nhap) { display: table-cell; }
+.xl-ky-o { position: relative; }
+.xl-xoa { position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; border-radius: 50%; border: none; background: var(--danger); color: #fff; font-size: 9px; line-height: 16px; padding: 0; cursor: pointer; opacity: 0; transition: opacity .15s; }
+.xl-ky-o:hover .xl-xoa, .xl-xoa:focus { opacity: 1; }
+table.xl td.xl-them-ky { background: #fff; text-align: center; padding: 8px; border: 1px dashed var(--border-strong); }
+.xl-nhan-nhap { display: flex; align-items: center; gap: 4px; }
+.xl-nhan-nhap .xl-nhap { flex: 1; min-width: 0; }
+textarea.xl-nhap { resize: none; overflow: hidden; display: block; line-height: 1.25; }

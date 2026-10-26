@@ -7,7 +7,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype !== 'application/pdf') return cb(new Error('Chỉ nhận file PDF'));
+    if (file.mimetype !== 'application/pdf') return cb(Object.assign(new Error('Chỉ nhận file PDF'), { status: 400 }));
     cb(null, true);
   },
 });
