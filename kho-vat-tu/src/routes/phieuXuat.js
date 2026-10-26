@@ -1,4 +1,5 @@
 const express = require('express');
+const { headerTaiFile } = require('../services/tenFile');
 const { db, findOrCreateVatTu, tonKhoCuaVatTu, layCauHinh } = require('../db');
 const { soTienBangChu } = require('../services/soTienBangChu');
 const { taoFilePhieu } = require('../services/xuatMauPhieu');
@@ -28,15 +29,19 @@ router.get('/:id', (req, res) => {
   res.json({ ...phieu, items });
 });
 
-router.get('/:id/xuat-excel', async (req, res) => {
+router.get('/:id/xuat-excel', async (req, res, next) => {
   const phieu = db.prepare('SELECT * FROM phieu_xuat WHERE id = ?').get(req.params.id);
   if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu xuất' });
   const items = db.prepare('SELECT * FROM phieu_xuat_items WHERE phieu_xuat_id = ? ORDER BY stt').all(req.params.id);
-  const wb = taoFilePhieu(phieu, items, 'xuat', layCauHinh());
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="PhieuXuatKho_${phieu.so_phieu || phieu.id}.xlsx"`);
-  await wb.xlsx.write(res);
-  res.end();
+  try {
+    const wb = taoFilePhieu(phieu, items, 'xuat', layCauHinh());
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', headerTaiFile(`PhieuXuatKho_${phieu.so_phieu || phieu.id}.xlsx`));
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    next(err);
+  }
 });
 
 // Kiểm tra đủ tồn kho cho một danh sách { vat_tu_id, sl_thuc_xuat } đã GỘP theo vật tư
@@ -98,7 +103,7 @@ function kiemTraLienKetNhap(items) {
 function luuMotPhieuXuat(p) {
   const rows = p.items.map((it, idx) => ({ stt: idx + 1, ...it }));
   const tongTienHang = rows.reduce((s, r) => s + r.thanh_tien, 0);
-  const thueSuat = Number(p.thue_suat) || 0;
+  const thueSuat = Math.min(100, Math.max(0, Number(p.thue_suat) || 0));
   const tienThue = Math.round((tongTienHang * thueSuat) / 100);
   const tongCong = tongTienHang + tienThue;
 
@@ -159,6 +164,7 @@ router.post('/', (req, res) => {
   const itemsTho = Array.isArray(b.items) ? b.items : [];
   if (itemsTho.length === 0) return res.status(400).json({ error: 'Phiếu xuất cần ít nhất 1 dòng hàng hóa' });
 
+  if (itemsTho.some((it) => !it || typeof it !== 'object')) return res.status(400).json({ error: 'Dòng hàng hóa không hợp lệ' });
   // Số lượng âm sẽ làm TĂNG tồn kho thay vì trừ — chặn từ đầu.
   const dongAm = itemsTho.filter((it) => (Number(it.sl_thuc_xuat) || 0) < 0 || (Number(it.don_gia) || 0) < 0);
   if (dongAm.length > 0) return res.status(400).json({ error: 'Số lượng và đơn giá không được âm' });
@@ -207,7 +213,7 @@ router.post('/phan-bo', (req, res) => {
     ly_do_xuat: b.ly_do_xuat || null,
     xuat_tai_kho: b.xuat_tai_kho || null,
     dia_diem: b.dia_diem || null,
-    thue_suat: Number(b.thue_suat) || 0,
+    thue_suat: Math.min(100, Math.max(0, Number(b.thue_suat) || 0)),
     // Thừa hưởng trường sổ sách từ phiếu nhập gốc, trừ khi body ghi đè.
     tk_doi_ung: chuoiHoacNull(b.tk_doi_ung) || phieuNhap.tk_doi_ung || null,
     tieu_muc: chuoiHoacNull(b.tieu_muc) || phieuNhap.tieu_muc || null,
@@ -219,7 +225,12 @@ router.post('/phan-bo', (req, res) => {
   const dongHangTheoNhom = nhom.map(() => []);
 
   for (const it of itemsNhap) {
-    const soLuongTheoNhom = (phanBo[it.id] || []).map((v) => Number(v) || 0);
+    const phanBoDong = phanBo[it.id];
+    if (phanBoDong !== undefined && !Array.isArray(phanBoDong)) {
+      return res.status(400).json({ error: 'phan_bo phải là mảng số lượng theo từng nhóm' });
+    }
+    const soLuongTheoNhom = (phanBoDong || []).map((v) => Number(v) || 0);
+    if (soLuongTheoNhom.some((v) => v < 0)) return res.status(400).json({ error: 'Số lượng và đơn giá không được âm' });
     const tongDaChia = soLuongTheoNhom.reduce((s, v) => s + v, 0);
     if (tongDaChia > it.sl_thuc_nhap) {
       canhBao.push(`"${it.ten_hang}": đã phân bổ ${tongDaChia} nhưng phiếu nhập chỉ có ${it.sl_thuc_nhap} — kiểm tra lại.`);

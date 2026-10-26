@@ -20,7 +20,7 @@ router.post('/hoa-don', upload.single('file'), async (req, res) => {
     const ketQua = await parsePdfBuffer(req.file.buffer);
     res.json({ ...ketQua, tenFileGoc: req.file.originalname });
   } catch (err) {
-    res.status(500).json({ error: 'Không đọc được file PDF: ' + err.message });
+    res.status(400).json({ error: 'Không đọc được file PDF: ' + err.message });
   }
 });
 

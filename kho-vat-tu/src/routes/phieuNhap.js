@@ -1,4 +1,5 @@
 const express = require('express');
+const { headerTaiFile } = require('../services/tenFile');
 const { db, findOrCreateVatTu, tonKhoCuaVatTu, layCauHinh } = require('../db');
 const { soTienBangChu } = require('../services/soTienBangChu');
 const { taoFilePhieu } = require('../services/xuatMauPhieu');
@@ -23,15 +24,19 @@ router.get('/:id', (req, res) => {
   res.json({ ...phieu, items });
 });
 
-router.get('/:id/xuat-excel', async (req, res) => {
+router.get('/:id/xuat-excel', async (req, res, next) => {
   const phieu = db.prepare('SELECT * FROM phieu_nhap WHERE id = ?').get(req.params.id);
   if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu nhập' });
   const items = db.prepare('SELECT * FROM phieu_nhap_items WHERE phieu_nhap_id = ? ORDER BY stt').all(req.params.id);
-  const wb = taoFilePhieu(phieu, items, 'nhap', layCauHinh());
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="PhieuNhapKho_${phieu.so_phieu || phieu.id}.xlsx"`);
-  await wb.xlsx.write(res);
-  res.end();
+  try {
+    const wb = taoFilePhieu(phieu, items, 'nhap', layCauHinh());
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', headerTaiFile(`PhieuNhapKho_${phieu.so_phieu || phieu.id}.xlsx`));
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    next(err);
+  }
 });
 
 // body: { so_phieu, ngay, no_tk, co_tk, nguoi_nhap, don_vi, ly_do_nhap, nhap_tai_kho,
@@ -42,6 +47,7 @@ router.post('/', (req, res) => {
   const b = req.body || {};
   const items = Array.isArray(b.items) ? b.items : [];
   if (items.length === 0) return res.status(400).json({ error: 'Phiếu nhập cần ít nhất 1 dòng hàng hóa' });
+  if (items.some((it) => !it || typeof it !== 'object')) return res.status(400).json({ error: 'Dòng hàng hóa không hợp lệ' });
   if (items.some((it) => (Number(it.sl_thuc_nhap) || 0) < 0 || (Number(it.don_gia) || 0) < 0)) {
     return res.status(400).json({ error: 'Số lượng và đơn giá không được âm' });
   }
@@ -69,7 +75,7 @@ router.post('/', (req, res) => {
       };
     });
 
-    const thueSuat = Number(b.thue_suat) || 0;
+    const thueSuat = Math.min(100, Math.max(0, Number(b.thue_suat) || 0));
     const tienThue = Math.round((tongTienHang * thueSuat) / 100);
     const tongCong = tongTienHang + tienThue;
 
