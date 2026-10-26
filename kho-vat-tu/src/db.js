@@ -5,7 +5,8 @@ const Database = require('better-sqlite3');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const db = new Database(path.join(DATA_DIR, 'kho.db'));
+// KHO_DB_PATH cho phép trỏ sang file DB khác (dùng khi chạy thử/kiểm thử song song).
+const db = new Database(process.env.KHO_DB_PATH || path.join(DATA_DIR, 'kho.db'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
@@ -111,6 +112,23 @@ function damBaoCoCot(bang, cot, dinhNghia) {
   }
 }
 damBaoCoCot('phieu_xuat', 'so_chung_tu_goc', 'TEXT');
+
+// Các trường phục vụ "Sổ tổng hợp nhập xuất vật tư" (form theo dõi chi tiết của Phòng KH-TC).
+// Chỉ lưu và xuất ra Excel, màn hình chính không bắt buộc hiển thị.
+//   tk_doi_ung     : TK đối ứng (cột J của sổ)
+//   tieu_muc       : tiểu mục chi (cột K của sổ)
+//   nguon_kinh_phi : '661.2' hoặc '337' — quyết định số liệu rơi vào nhóm cột TK 661.2 hay TK 337
+damBaoCoCot('phieu_nhap', 'tk_doi_ung', 'TEXT');
+damBaoCoCot('phieu_nhap', 'tieu_muc', 'TEXT');
+damBaoCoCot('phieu_nhap', 'nguon_kinh_phi', "TEXT DEFAULT '661.2'");
+damBaoCoCot('phieu_xuat', 'tk_doi_ung', 'TEXT');
+damBaoCoCot('phieu_xuat', 'tieu_muc', 'TEXT');
+damBaoCoCot('phieu_xuat', 'nguon_kinh_phi', "TEXT DEFAULT '661.2'");
+// Tiểu mục riêng cho từng dòng hàng (để trống = lấy theo phiếu).
+damBaoCoCot('phieu_nhap_items', 'tieu_muc', 'TEXT');
+damBaoCoCot('phieu_xuat_items', 'tieu_muc', 'TEXT');
+// Dòng xuất này lấy từ dòng nhập nào — để sổ tổng hợp ghép đúng "nhập ↔ xuất" trên cùng 1 dòng.
+damBaoCoCot('phieu_xuat_items', 'phieu_nhap_item_id', 'INTEGER');
 
 // Tìm vật tư theo đúng tên (không phân biệt hoa thường/khoảng trắng thừa), tạo mới nếu chưa có.
 function findOrCreateVatTu({ ten_hang, dvt, ma_so }) {
