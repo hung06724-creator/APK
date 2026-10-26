@@ -501,20 +501,36 @@ async function xuLyFilePdf(file) {
     document.getElementById('pn-nha-cung-cap').value = kq.tenNguoiBan || '';
     document.getElementById('pn-chung-tu').value = kq.kyHieu && kq.soHoaDon
       ? `01 Hóa đơn GTGT ký hiệu ${kq.kyHieu} số ${kq.soHoaDon}` : '';
-    document.getElementById('pn-thue-suat').value = (kq.items[0] && kq.items[0].thue_suat) || 8;
+    // Thuế suất do parser xác định (1 mức; nếu hóa đơn nhiều mức thì là thuế suất bình quân). Hóa đơn
+    // không in thuế suất → mặc định 8%.
+    document.getElementById('pn-thue-suat').value = kq.thueSuat != null ? kq.thueSuat : 8;
 
+    // don_gia_khop: đơn giá tính lại (thành tiền ÷ số lượng) khi hóa đơn in đơn giá đã làm tròn,
+    // để thành tiền trên phiếu = thành tiền trên hóa đơn.
     dongNhap = (kq.items || []).map((it) =>
       dongNhapMoi({
         ten_hang: it.ten_hang, dvt: it.dvt,
-        sl_chung_tu: it.sl_chung_tu, sl_thuc_nhap: it.sl_thuc_nhap, don_gia: it.don_gia,
+        sl_chung_tu: it.sl_chung_tu, sl_thuc_nhap: it.sl_thuc_nhap,
+        don_gia: it.don_gia_khop !== undefined ? it.don_gia_khop : it.don_gia,
       })
     );
     if (dongNhap.length === 0) dongNhap.push(dongNhapMoi());
     veBangDongNhap();
     capNhatTongNhap();
 
+    // Đối chiếu tổng cộng của phiếu (tính như khi lưu: làm tròn từng dòng, rồi làm tròn thuế) với hóa đơn gốc.
     if (kq.tongCong) {
-      canhBaoEl.innerHTML += dongCanhBao(`Tổng cộng trên hóa đơn gốc: <b>${formatSo(kq.tongCong)}</b> — so sánh với tổng tính được bên dưới để kiểm tra.`, false);
+      const tongHang = dongNhap.reduce((s, d) => s + Math.round((Number(d.sl_thuc_nhap) || 0) * (Number(d.don_gia) || 0)), 0);
+      const tongCongPhieu = tongHang + Math.round((tongHang * (Number(document.getElementById('pn-thue-suat').value) || 0)) / 100);
+      const lech = tongCongPhieu - kq.tongCong;
+      const dongTong = `Tổng cộng trên hóa đơn gốc: <b>${formatSo(kq.tongCong)}</b>; tổng cộng trên phiếu: <b>${formatSo(tongCongPhieu)}</b>`;
+      if (lech === 0) {
+        canhBaoEl.innerHTML += dongCanhBao(`${dongTong} — khớp.`, false);
+      } else if (Math.abs(lech) <= 5) {
+        canhBaoEl.innerHTML += dongCanhBao(`${dongTong} — lệch ${formatSo(lech)} đồng do làm tròn thuế, chấp nhận được.`, false);
+      } else {
+        canhBaoEl.innerHTML += dongCanhBao(`${dongTong} — LỆCH ${formatSo(lech)} đồng, hãy đối chiếu từng dòng hàng với hóa đơn trước khi lưu.`, true);
+      }
     }
   } catch (err) {
     canhBaoEl.innerHTML = dongCanhBao('Lỗi đọc file: ' + esc(err.message), true);
