@@ -244,3 +244,14 @@ table.xl td.xl-them-ky { background: #fff; text-align: center; padding: 8px; bor
 .xl-nhan-nhap { display: flex; align-items: center; gap: 4px; }
 .xl-nhan-nhap .xl-nhap { flex: 1; min-width: 0; }
 textarea.xl-nhap { resize: none; overflow: hidden; display: block; line-height: 1.25; }
+
+/* Hộp thoại chi tiết sổ theo dõi */
+.ui-overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 200; display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+.ui-overlay.open { display: flex; }
+.ui-dialog { background: var(--card-bg); border-radius: 14px; box-shadow: var(--shadow-dialog); width: min(960px, 100%); max-height: none; }
+.ui-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border-soft); }
+.ui-dialog-head h2 { font-size: 1.1rem; margin: 0; }
+.ui-dialog-body { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+.ui-dialog-foot { padding: 12px 20px 18px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-soft); }
+.ui-fieldset { border: 1px solid var(--border-soft); border-radius: 10px; padding: 12px 14px; }
+.ui-fieldset legend { font-size: 12px; font-weight: 600; color: var(--text-muted); padding: 0 6px; }

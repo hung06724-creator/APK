@@ -26,6 +26,8 @@ Website chạy trên máy cá nhân (localhost), giúp:
 - Nạp dữ liệu lịch sử từ file Excel phiếu nhập/xuất mẫu cũ.
 - **Cấu hình mẫu phiếu Excel**: tự đổi tên đơn vị, bộ phận, danh sách người ký cho
   phiếu nhập/xuất — không cần sửa code.
+- **Sổ theo dõi nhập/xuất** (mẫu Excel tổng hợp): nhập đầy đủ các cột trên form,
+  xem nhanh trên web, **Xuất Excel** ra file `.xls` giống mẫu `templates/theo-doi-nhap-xuat-mau.xls`.
 
 ## Cài đặt & chạy
 
@@ -35,9 +37,13 @@ Cần có [Node.js](https://nodejs.org) (bản 18 trở lên) trên máy.
 cd kho-vat-tu
 npm install
 npm start
+npm test
 ```
 
 Mở trình duyệt vào **http://localhost:3000**.
+
+**Xuất sổ theo dõi nhập/xuất:** cần Python 3 với `xlrd`, `xlutils`, `xlwt` (xem `scripts/requirements-theo-doi.txt`).
+Tạo lại file mẫu trống từ Excel gốc: `npm run build-theo-doi-template` (chỉ khi có file nguồn).
 
 Dữ liệu được lưu trong file `data/kho.db` (SQLite), nằm ngay trong thư mục này —
 không cần cài đặt cơ sở dữ liệu riêng. File này không được đưa lên Git.
