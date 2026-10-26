@@ -4,6 +4,7 @@ const {
   layDuLieuKy,
   xuatTongHop,
 } = require('../services/xuatTongHop');
+const { headerTaiFile } = require('../services/tenFile');
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.get('/xuat-excel', async (req, res, next) => {
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
-    res.setHeader('Content-Disposition', `attachment; filename="${tenFile}"; filename*=UTF-8''${encodeURIComponent(tenFile)}`);
+    res.setHeader('Content-Disposition', headerTaiFile(tenFile));
     res.send(Buffer.from(buffer));
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });

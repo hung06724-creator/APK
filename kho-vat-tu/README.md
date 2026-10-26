@@ -24,6 +24,10 @@ Website chạy trên máy cá nhân (localhost), giúp:
   hàng vào cùng 1 phiếu — tự gõ số lượng cho từng mặt hàng vào từng nhóm.
 - Theo dõi **tồn kho** từng vật tư (tồn = tổng nhập − tổng xuất).
 - Nạp dữ liệu lịch sử từ file Excel phiếu nhập/xuất mẫu cũ.
+- **Sổ tổng hợp nhập xuất vật tư** (theo quý/năm): tự ghép từng dòng nhập với dòng xuất tương ứng,
+  xuất Excel đúng form sổ theo dõi của Phòng KH-TC (cột TK đối ứng, tiểu mục, nhóm TK 661.2 / TK 337,
+  Nhập/Xuất/Tồn). Màn hình chỉ hiện các cột chính; các trường phụ (TK đối ứng, tiểu mục, nguồn kinh phí)
+  nằm trong khối "Thông tin bổ sung" / nút "Sổ sách" và được lưu để xuất ra Excel.
 - **Cấu hình mẫu phiếu Excel**: tự đổi tên đơn vị, bộ phận, danh sách người ký cho
   phiếu nhập/xuất — không cần sửa code.
 

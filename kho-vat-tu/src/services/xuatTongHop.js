@@ -16,23 +16,27 @@ const ExcelJS = require('exceljs');
 const NUMFMT = '_(* #,##0_);_(* (#,##0);_(* -??_);_(@_)';
 const NUMFMT_2 = '_(* #,##0.00_);_(* (#,##0.00);_(* -??_);_(@_)';
 
-// Mẫu gốc có dòng TỔNG CỘNG cộng cả cột Số lượng lẫn Đơn giá (SUM cho cả 9 cột M-U). Cộng
-// đơn giá thì vô nghĩa về nghiệp vụ nhưng là đúng form mẫu; đặt false để bỏ SUM ở cột Đơn giá.
-const TONG_CA_DON_GIA = true;
+// Mẫu gốc có SUM cả cột Đơn giá ở dòng TỔNG CỘNG, nhưng cộng đơn giá vô nghĩa về nghiệp vụ và
+// con số tràn cột hẹp (hiện ####), nên để TRỐNG các ô Đơn giá ở dòng tổng. Đặt true nếu muốn
+// SUM đơn giá như mẫu.
+const TONG_CA_DON_GIA = false;
 
 const HANG_DAU_DU_LIEU = 9; // dòng dữ liệu đầu tiên (dòng 6-8 là header)
 const SO_COT = 30; // A..AD
 const CAC_QUY_LA_MA = ['I', 'II', 'III', 'IV'];
 
-// Độ rộng cột: A..R sao chép đúng sheet "QUÝ III - 2013" của file mẫu (3 sheet mẫu mỗi sheet
-// chỉnh độ rộng hơi khác nhau). Cột S..AD trong sheet đó chỉ rộng 4.99 (mẫu để trống nhóm Tồn
-// và nhóm TK 337) → quá hẹp để chứa đơn giá / thành tiền (hiện ####), nên lấy độ rộng thực
-// tế đã dùng ở các sheet QUÝ I/II của mẫu (lấy giá trị lớn hơn giữa độ rộng nhóm TK661.2
-// tương ứng và độ rộng sheet QUÝ II).
+// Độ rộng cột: lấy từ sheet "QUÝ III - 2013" của file mẫu (3 sheet mẫu mỗi sheet chỉnh độ rộng
+// hơi khác nhau), có 3 chỗ LỆCH CÓ CHỦ Ý:
+//  - D và H (Đơn vị công tác) nới từ 3.87/4.5 lên 9.5: tên đơn vị thật như "Phòng QLCSVC TB và DA"
+//    quá dài cho cột hẹp (gãy từng chữ, mọi dòng cao 4 dòng chữ). Tổng độ rộng A..L tăng 14.9%.
+//  - A và E (ngày) nới ~10%: mẫu dùng font Normal .VnTime 12 còn ExcelJS ghi Calibri 11 nên độ
+//    rộng tính theo ký tự lệch pixel; "dd/mm/yyyy" ở 6.37 sát giới hạn.
+//  - S..AD trong sheet III chỉ rộng 4.99 (mẫu để trống nhóm Tồn và nhóm TK 337) → quá hẹp để chứa
+//    đơn giá / thành tiền; dùng độ rộng nhóm TK661.2 và độ rộng thực tế ở sheet QUÝ I/II của mẫu.
 const DO_RONG_661 = [7.25, 7.5, 8.62, 4.5, 9.5, 8.24, 4.62, 7.5, 8.62]; // M..U
 const DO_RONG_337 = [7.25, 7.5, 8.62, 6.62, 9.5, 8.99, 6.99, 7.62, 8.87]; // V..AD
 const DO_RONG_COT = [
-  6.37, 3.74, 10.99, 3.87, 6.5, 4.87, 10.87, 4.5, 16.5, 3.87, 3.62, 4.25,
+  7.0, 3.74, 10.99, 9.5, 7.15, 4.87, 10.87, 9.5, 16.5, 3.87, 3.62, 4.25,
   ...DO_RONG_661,
   ...DO_RONG_337,
 ];
@@ -47,7 +51,14 @@ const so = (x) => {
 const r6 = (x) => Math.round(x * 1e6) / 1e6;
 const r4 = (x) => Math.round(x * 1e4) / 1e4;
 const pad2 = (n) => String(n).padStart(2, '0');
-const chuoi = (v) => (v === null || v === undefined ? '' : String(v).trim());
+// Ký tự cấm trong XML 1.0 (ExcelJS chỉ bỏ nhóm C0 nên U+FFFE/U+FFFF và surrogate lẻ vẫn làm
+// hỏng file): bỏ hết trước khi ghi vào ô hoặc trả JSON.
+const KY_TU_CAM_XML =
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+const sach = (v) => String(v).replace(KY_TU_CAM_XML, '').slice(0, 32000);
+const chuoi = (v) => (v === null || v === undefined ? '' : sach(v).trim());
+// Làm tròn đến đồng, nửa ra xa số 0 — giống hàm ROUND của Excel.
+const lamTron = (x) => Math.sign(x) * Math.round(Math.abs(x));
 
 function chuanNhom(v) {
   return String(v || '').includes('337') ? '337' : '661.2';
@@ -87,22 +98,22 @@ function khoaVatTu(it) {
   return `ten:${chuoi(it.ten_hang).toLowerCase().replace(/\s+/g, ' ')}`;
 }
 
-// Thành tiền trong DB là số được lưu (và là cơ sở của "tổng tiền hàng" trên phiếu); đơn giá
-// đôi khi lệch vài đồng do làm tròn. Dòng sổ dùng công thức Thành tiền = SL x Đơn giá, nên nếu
-// SL x ĐG lệch thành tiền DB quá 0,5đ thì đơn giá được tính lại = thành tiền / SL để tổng
-// khớp phiếu. Trả {dg, tt, tinhLai}.
+// Thành tiền trên dòng sổ = ROUND(SL x Đơn giá, 0) (phiếu nhập/xuất cũng làm tròn như vậy).
+// Thành tiền trong DB là số được lưu (cơ sở của "tổng tiền hàng" trên phiếu); nếu đơn giá lệch
+// khiến ROUND(SL x ĐG) khác ROUND(thành tiền DB) thì đơn giá được tính lại = thành tiền / SL để
+// tổng khớp phiếu. Trả {dg, tt, tinhLai}.
 function chuanDonGia(sl, dg, tt) {
   let dgOut = r6(dg);
   let tinhLai = false;
-  if (sl > 0) {
-    if (tt > 0 && Math.abs(sl * dgOut - tt) > 0.5) {
+  if (sl > 0 && tt > 0) {
+    if (dgOut === 0) {
+      dgOut = r6(tt / sl);
+    } else if (lamTron(sl * dgOut) !== lamTron(tt)) {
       dgOut = r6(tt / sl);
       tinhLai = true;
-    } else if (dgOut === 0 && tt > 0) {
-      dgOut = r6(tt / sl);
     }
   }
-  return { dg: dgOut, tt: r4(sl * dgOut), tinhLai };
+  return { dg: dgOut, tt: lamTron(sl * dgOut), tinhLai };
 }
 
 // ---------------------------------------------------------------------------------
@@ -113,9 +124,28 @@ function chuanDonGia(sl, dg, tt) {
 // phieuXuatList: [{id, so_phieu, ngay, nguoi_nhan, don_vi, tk_doi_ung, tieu_muc, nguon_kinh_phi,
 //                  items:[{id, vat_tu_id, stt, ten_hang, dvt, sl_thuc_xuat, don_gia, thanh_tien,
 //                          tieu_muc, phieu_nhap_item_id}]}]
-// Trả về mảng dòng đã sắp xếp (xem `moDong`). Cần truyền TOÀN BỘ phiếu (không lọc kỳ trước) để
-// việc ghép nhập↔xuất đúng; lọc kỳ làm sau bằng `locTheoKy`.
-function taoDongSoTongHop(phieuNhapList, phieuXuatList) {
+// ky (tuỳ chọn): {tu, den, gomKhongNgay} ('YYYY-MM-DD'). Không truyền = lấy hết.
+//
+// Cần truyền TOÀN BỘ phiếu (không lọc kỳ trước) vì việc ghép nhập↔xuất và số tồn lũy kế phải
+// tính trên cả chuỗi nhập→xuất. Lọc kỳ (đúng như mẫu: sheet quý = nhập trong quý + xuất trong
+// quý) được làm TRONG hàm này, theo từng PHẦN của dòng:
+//   - phần NHẬP chỉ hiện nếu ngày nhập thuộc kỳ; phần XUẤT chỉ hiện nếu ngày xuất thuộc kỳ;
+//   - dòng nhập kỳ này, xuất kỳ sau: sheet kỳ này chỉ có phần nhập (xuất hiện ở sheet kỳ sau);
+//   - dòng xuất kỳ này, nhập kỳ trước: phần Nhập (cả ngày/phiếu/người nhập) để TRỐNG như mẫu,
+//     cột Tồn vẫn là số tồn lũy kế theo cả chuỗi (giá trị cố định, tham chiếu nhập ở
+//     `tham_chieu_nhap`);
+//   - phiếu xuất không ngày nhưng có liên kết: dùng ngày của dòng nhập để xếp kỳ;
+//     không ngày và không liên kết: chỉ đưa vào kỳ "cả năm"/"tuỳ chọn" (ky.gomKhongNgay), kèm cảnh báo.
+// Trả về mảng dòng đã sắp xếp (xem `moDong`).
+function taoDongSoTongHop(phieuNhapList, phieuXuatList, ky) {
+  const trongKy = (ngay) => {
+    if (!ky) return true;
+    return (!ky.tu || ngay >= ky.tu) && (!ky.den || ngay <= ky.den);
+  };
+  const gomKhongNgay = !ky || !!ky.gomKhongNgay;
+  // Phần có ngày thì xét theo kỳ; không có ngày thì chỉ hiện khi gomKhongNgay.
+  const hienNgay = (ngay) => (ngay ? trongKy(ngay) : gomKhongNgay);
+
   const nhapNodes = [];
   const nhapTheoId = new Map();
   for (const p of phieuNhapList || []) {
@@ -144,6 +174,7 @@ function taoDongSoTongHop(phieuNhapList, phieuXuatList) {
       xuatNodes.push({
         q, it, sl, dg: g.dg, tt: g.tt, tinhLai: g.tinhLai,
         ngay: chuanNgay(q.ngay),
+        ngayHL: '', // ngày dùng để xếp kỳ (thiếu ngày thì lấy ngày dòng nhập đã liên kết)
         nhom: chuanNhom(q.nguon_kinh_phi),
         key: khoaVatTu(it),
         thuTu: idx,
@@ -200,9 +231,11 @@ function taoDongSoTongHop(phieuNhapList, phieuXuatList) {
     const bac2 = ganNhat(ungVien.filter((n) => n.sl - n.daXuat >= x.sl - EPS));
     if (bac2) gan(x, bac2, 'du_phong');
   }
+  for (const x of xuatNodes) x.ngayHL = x.ngay || (x.nhapNode ? x.nhapNode.ngay : '');
 
   // 3) Dựng dòng.
   const nhom = [];
+  const NGAY_CUOI = '9999-12-31';
 
   const tieuMucCuaNhap = (n) => chuoi(n.it.tieu_muc) || chuoi(n.p.tieu_muc);
   const tieuMucCuaXuat = (x) => chuoi(x.it.tieu_muc) || chuoi(x.q.tieu_muc);
@@ -218,6 +251,10 @@ function taoDongSoTongHop(phieuNhapList, phieuXuatList) {
     sl_xuat: null, dg_xuat: null, tt_xuat: null,
     sl_ton: null, dg_ton: null, tt_ton: null,
     co_nhap: false, co_xuat: false, co_ton: false, tiep: false,
+    // 'chinh' (=Nhập-Xuất), 'tiep' (=Tồn dòng trên-Xuất) hoặc null (giá trị cố định, không
+    // thể tính bằng công thức vì dòng nhập/xuất trước nằm ngoài sheet).
+    ton_cong_thuc: null,
+    tham_chieu_nhap: null, // dòng xuất mà phần Nhập nằm ở kỳ khác: {ngay_nhap, so_phieu_nhap, ...}
     phieu_nhap_id: null, phieu_nhap_item_id: null, phieu_xuat_id: null, phieu_xuat_item_id: null,
     ghep: '',
     dg_tinh_lai: false,
@@ -236,6 +273,7 @@ function taoDongSoTongHop(phieuNhapList, phieuXuatList) {
     d.phieu_nhap_id = n.p.id ?? null;
     d.phieu_nhap_item_id = n.it.id ?? null;
     if (n.tinhLai) d.dg_tinh_lai = true;
+    if (!n.ngay) d.canh_bao.push('Phiếu nhập không có ngày: chỉ hiện trong báo cáo cả năm / tuỳ chọn.');
   };
   const dienXuat = (d, x) => {
     d.co_xuat = true;
@@ -250,116 +288,147 @@ function taoDongSoTongHop(phieuNhapList, phieuXuatList) {
     d.phieu_xuat_item_id = x.it.id ?? null;
     d.ghep = x.ghep;
     if (x.tinhLai) d.dg_tinh_lai = true;
+    if (!x.ngay) {
+      d.canh_bao.push(
+        x.nhapNode
+          ? 'Phiếu xuất không có ngày: xếp kỳ theo ngày của dòng nhập đã liên kết.'
+          : 'Phiếu xuất không có ngày và chưa liên kết dòng nhập: chỉ hiện trong báo cáo cả năm / tuỳ chọn.'
+      );
+    }
   };
-  const dienTon = (d, slTon, dg) => {
+  const dienTon = (d, slTon, dg, congThuc) => {
     d.co_ton = true;
+    d.ton_cong_thuc = congThuc;
     d.sl_ton = r6(slTon);
     d.dg_ton = dg;
-    d.tt_ton = r4(d.sl_ton * dg);
+    d.tt_ton = lamTron(d.sl_ton * dg);
     if (d.sl_ton < -1e-9) {
       d.canh_bao.push(`Tồn âm (${d.sl_ton}): số lượng xuất vượt số lượng nhập của dòng này.`);
     }
   };
-
-  // 3a) Dòng nhập (+ các dòng xuất tương ứng)
-  for (const n of nhapNodes) {
-    const ds = n.xuat.slice().sort(
-      (a, b) => soSanhChuoi(a.ngay, b.ngay) || (a.q.id || 0) - (b.q.id || 0) || a.thuTu - b.thuTu
-    );
-    const cung = ds.filter((x) => x.nhom === n.nhom);
-    const lech = ds.filter((x) => x.nhom !== n.nhom);
-
-    const dong = [];
-    let slTon = n.sl;
-    cung.forEach((x, i) => {
-      const d = moDong();
-      d.nhom = n.nhom;
-      d.ten_hang = chuoi(n.it.ten_hang) || chuoi(x.it.ten_hang);
-      d.dvt = chuoi(n.it.dvt) || chuoi(x.it.dvt);
-      if (i === 0) {
-        d.loai = 'nhap_xuat';
-        dienNhap(d, n);
-        d.tk_doi_ung = chuoi(n.p.tk_doi_ung) || chuoi(x.q.tk_doi_ung);
-        d.tieu_muc = tieuMucCuaNhap(n) || tieuMucCuaXuat(x);
-      } else {
-        d.loai = 'xuat_tiep';
-        d.tiep = true;
-        d.tk_doi_ung = chuoi(x.q.tk_doi_ung) || chuoi(n.p.tk_doi_ung);
-        d.tieu_muc = tieuMucCuaXuat(x) || tieuMucCuaNhap(n);
-      }
-      dienXuat(d, x);
-      slTon -= x.sl;
-      dienTon(d, slTon, n.dg);
-      dong.push(d);
-    });
-    if (cung.length === 0) {
-      const d = moDong();
-      d.loai = 'chi_nhap';
-      d.nhom = n.nhom;
-      d.ten_hang = chuoi(n.it.ten_hang);
-      d.dvt = chuoi(n.it.dvt);
-      d.tk_doi_ung = chuoi(n.p.tk_doi_ung);
-      d.tieu_muc = tieuMucCuaNhap(n);
-      dienNhap(d, n);
-      dienTon(d, slTon, n.dg);
-      dong.push(d);
-    }
-    nhom.push({
-      ngay: n.ngay,
-      loai: 0,
-      soPhieu: chuoi(n.p.so_phieu),
-      pid: n.p.id || 0,
-      thuTu: n.it.id || n.thuTu,
-      dong,
-    });
-
-    // Xuất khác nguồn kinh phí với dòng nhập → không thể gộp chung nhóm cột → dòng riêng.
-    for (const x of lech) {
-      const d = moDong();
-      d.loai = 'chi_xuat';
-      d.nhom = x.nhom;
-      d.ten_hang = chuoi(x.it.ten_hang) || chuoi(n.it.ten_hang);
-      d.dvt = chuoi(x.it.dvt) || chuoi(n.it.dvt);
-      d.tk_doi_ung = chuoi(x.q.tk_doi_ung);
-      d.tieu_muc = tieuMucCuaXuat(x);
-      dienXuat(d, x);
-      d.canh_bao.push(
-        `Xuất theo nguồn TK ${x.nhom} nhưng hàng nhập theo nguồn TK ${n.nhom} (phiếu ${chuoi(n.p.so_phieu)}): ` +
-          'tách thành dòng riêng, cột Tồn để trống.'
-      );
-      nhom.push({
-        ngay: x.ngay,
-        loai: 1,
-        soPhieu: chuoi(x.q.so_phieu),
-        pid: x.q.id || 0,
-        thuTu: x.it.id || x.thuTu,
-        dong: [d],
-      });
-    }
-  }
-
-  // 3b) Dòng chỉ có xuất (không tìm được dòng nhập)
-  for (const x of xuatNodes) {
-    if (x.nhapNode) continue;
+  const chiXuat = (x, loai, canhBao) => {
     const d = moDong();
-    d.loai = 'chi_xuat';
+    d.loai = loai;
     d.nhom = x.nhom;
     d.ten_hang = chuoi(x.it.ten_hang);
     d.dvt = chuoi(x.it.dvt);
     d.tk_doi_ung = chuoi(x.q.tk_doi_ung);
     d.tieu_muc = tieuMucCuaXuat(x);
     dienXuat(d, x);
-    d.canh_bao.push(
-      'Chưa tìm thấy dòng nhập tương ứng (có thể nhập ở kỳ trước hoặc chưa liên kết phiếu nhập): cột Nhập và Tồn để trống.'
-    );
+    (canhBao || []).forEach((c) => d.canh_bao.push(c));
     nhom.push({
-      ngay: x.ngay,
+      ngay: x.ngayHL || NGAY_CUOI,
       loai: 1,
       soPhieu: chuoi(x.q.so_phieu),
       pid: x.q.id || 0,
       thuTu: x.it.id || x.thuTu,
       dong: [d],
     });
+    return d;
+  };
+
+  // 3a) Theo từng dòng nhập (+ chuỗi các dòng xuất của nó)
+  for (const n of nhapNodes) {
+    const ds = n.xuat.slice().sort(
+      (a, b) =>
+        soSanhChuoi(a.ngayHL, b.ngayHL) || (a.q.id || 0) - (b.q.id || 0) || a.thuTu - b.thuTu
+    );
+    const cung = ds.filter((x) => x.nhom === n.nhom);
+    const lech = ds.filter((x) => x.nhom !== n.nhom);
+    // Tồn lũy kế sau mỗi lần xuất, tính trên TOÀN BỘ chuỗi (kể cả phần ngoài kỳ).
+    let con = n.sl;
+    const tonSau = cung.map((x) => {
+      con -= x.sl;
+      return con;
+    });
+
+    if (hienNgay(n.ngay)) {
+      const dong = [];
+      let lienTuc = true; // các lần xuất trước đó đều đã nằm ngay phía trên trong sheet
+      let soDaVe = 0;
+      cung.forEach((x, i) => {
+        if (!hienNgay(x.ngayHL)) {
+          lienTuc = false;
+          return;
+        }
+        const d = moDong();
+        const dau = dong.length === 0;
+        d.nhom = n.nhom;
+        d.ten_hang = chuoi(n.it.ten_hang) || chuoi(x.it.ten_hang);
+        d.dvt = chuoi(n.it.dvt) || chuoi(x.it.dvt);
+        if (dau) {
+          d.loai = 'nhap_xuat';
+          dienNhap(d, n);
+          d.tk_doi_ung = chuoi(n.p.tk_doi_ung) || chuoi(x.q.tk_doi_ung);
+          d.tieu_muc = tieuMucCuaNhap(n) || tieuMucCuaXuat(x);
+        } else {
+          d.loai = 'xuat_tiep';
+          d.tiep = true;
+          d.tk_doi_ung = chuoi(x.q.tk_doi_ung) || chuoi(n.p.tk_doi_ung);
+          d.tieu_muc = tieuMucCuaXuat(x) || tieuMucCuaNhap(n);
+        }
+        dienXuat(d, x);
+        const ct = lienTuc && i === soDaVe ? (dau ? 'chinh' : 'tiep') : null;
+        dienTon(d, tonSau[i], n.dg, ct);
+        soDaVe += 1;
+        dong.push(d);
+      });
+      if (dong.length === 0) {
+        // Chưa xuất (hoặc xuất ở kỳ sau): chỉ có phần nhập; Tồn = số tồn cuối kỳ.
+        const d = moDong();
+        d.loai = 'chi_nhap';
+        d.nhom = n.nhom;
+        d.ten_hang = chuoi(n.it.ten_hang);
+        d.dvt = chuoi(n.it.dvt);
+        d.tk_doi_ung = chuoi(n.p.tk_doi_ung);
+        d.tieu_muc = tieuMucCuaNhap(n);
+        dienNhap(d, n);
+        dienTon(d, n.sl, n.dg, 'chinh');
+        dong.push(d);
+      }
+      nhom.push({
+        ngay: n.ngay || NGAY_CUOI,
+        loai: 0,
+        soPhieu: chuoi(n.p.so_phieu),
+        pid: n.p.id || 0,
+        thuTu: n.it.id || n.thuTu,
+        dong,
+      });
+    } else {
+      // Nhập ở kỳ khác: chỉ những lần xuất nằm trong kỳ này, phần Nhập để trống.
+      cung.forEach((x, i) => {
+        if (!hienNgay(x.ngayHL)) return;
+        const d = chiXuat(x, 'xuat_nhap_ngoai_ky');
+        d.ten_hang = chuoi(n.it.ten_hang) || d.ten_hang;
+        d.dvt = chuoi(n.it.dvt) || d.dvt;
+        d.tk_doi_ung = d.tk_doi_ung || chuoi(n.p.tk_doi_ung);
+        d.tieu_muc = d.tieu_muc || tieuMucCuaNhap(n);
+        d.tham_chieu_nhap = {
+          ngay_nhap: n.ngay,
+          so_phieu_nhap: chuoi(n.p.so_phieu),
+          phieu_nhap_id: n.p.id ?? null,
+          phieu_nhap_item_id: n.it.id ?? null,
+        };
+        dienTon(d, tonSau[i], n.dg, null);
+      });
+    }
+
+    // Xuất khác nguồn kinh phí với dòng nhập → không thể gộp chung nhóm cột → dòng riêng.
+    for (const x of lech) {
+      if (!hienNgay(x.ngayHL)) continue;
+      chiXuat(x, 'chi_xuat', [
+        `Xuất theo nguồn TK ${x.nhom} nhưng hàng nhập theo nguồn TK ${n.nhom} (phiếu ${chuoi(n.p.so_phieu)}): ` +
+          'tách thành dòng riêng, cột Tồn để trống.',
+      ]);
+    }
+  }
+
+  // 3b) Dòng chỉ có xuất (không tìm được dòng nhập)
+  for (const x of xuatNodes) {
+    if (x.nhapNode || !hienNgay(x.ngay)) continue;
+    chiXuat(x, 'chi_xuat', [
+      'Chưa tìm thấy dòng nhập tương ứng (có thể nhập ở kỳ trước hoặc chưa liên kết phiếu nhập): cột Nhập và Tồn để trống.',
+    ]);
   }
 
   // 4) Sắp xếp theo ngày nhập (dòng chỉ-có-xuất theo ngày xuất) rồi số phiếu.
@@ -374,20 +443,17 @@ function taoDongSoTongHop(phieuNhapList, phieuXuatList) {
   const ketQua = [];
   for (const g of nhom) {
     for (const d of g.dong) {
-      d.ngay_loc = g.ngay;
+      d.ngay_loc = g.ngay === NGAY_CUOI ? '' : g.ngay;
       ketQua.push(d);
     }
   }
   return ketQua;
 }
 
-// Lọc dòng theo kỳ [tu, den] ('YYYY-MM-DD', bao gồm 2 đầu) theo ngày nhập của dòng (dòng chỉ
-// có xuất: theo ngày xuất; dòng xuất tiếp theo đi cùng dòng nhập gốc nên cùng ngày_loc).
-function locTheoKy(dong, tu, den) {
-  return dong.filter((d) => d.ngay_loc && (!tu || d.ngay_loc >= tu) && (!den || d.ngay_loc <= den));
-}
-
-// Tổng cộng theo từng nhóm TK (khớp với các công thức SUM ở dòng cuối sheet).
+// Tổng cộng theo từng nhóm TK, khớp với dòng "TỔNG CỘNG" của sheet:
+// Nhập = SUM các dòng, Xuất = SUM các dòng, Tồn = Nhập − Xuất (KHÔNG cộng cột Tồn từng dòng,
+// vì Tồn từng dòng là số lũy kế nên cộng lại sẽ tính trùng).
+// Đơn giá cộng lại không có nghĩa nên các trường dg_* trong tổng luôn = 0.
 function tinhTong(dong) {
   const moTong = () => ({
     sl_nhap: 0, dg_nhap: 0, tt_nhap: 0,
@@ -399,11 +465,13 @@ function tinhTong(dong) {
   for (const d of dong) {
     const t = tong[d.nhom] || tong['661.2'];
     t.so_dong += 1;
-    for (const k of ['sl_nhap', 'dg_nhap', 'tt_nhap', 'sl_xuat', 'dg_xuat', 'tt_xuat', 'sl_ton', 'dg_ton', 'tt_ton']) {
+    for (const k of ['sl_nhap', 'tt_nhap', 'sl_xuat', 'tt_xuat']) {
       if (d[k] !== null && d[k] !== undefined) t[k] += d[k];
     }
   }
   for (const t of Object.values(tong)) {
+    t.sl_ton = t.sl_nhap - t.sl_xuat;
+    t.tt_ton = t.tt_nhap - t.tt_xuat;
     for (const k of Object.keys(t)) t[k] = r4(t[k]);
   }
   return tong;
@@ -427,16 +495,41 @@ function loiKy(msg) {
   return e;
 }
 
-// query: {quy, nam, tu_ngay, den_ngay, cac_quy}. Trả về mô tả kỳ (1 kỳ), hoặc dùng
-// `cacQuyCuaNam(nam)` để lấy 4 kỳ.
+// Ngày lịch thật 'YYYY-MM-DD' (2026-02-30, 2026-13-45 không hợp lệ) → ISO hoặc ''.
+function ngayLich(v) {
+  const m = chuoi(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return '';
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+const coGiaTri = (v) => v !== undefined && v !== null && String(v).trim() !== '';
+
+function docNam(q) {
+  const nam = coGiaTri(q.nam) ? Number(String(q.nam).trim()) : new Date().getFullYear();
+  if (!Number.isInteger(nam) || nam < 2000 || nam > 2100) throw loiKy('nam không hợp lệ (2000-2100).');
+  return nam;
+}
+
+// query: {quy, nam, tu_ngay, den_ngay, cac_quy}. Trả về mô tả kỳ (1 kỳ); dùng
+// `cacQuyCuaNam(nam)` để lấy 4 kỳ. Không cho trộn quy với tu_ngay/den_ngay.
 function xacDinhKy(query = {}) {
   const q = query || {};
-  const coTu = chuoi(q.tu_ngay);
-  const coDen = chuoi(q.den_ngay);
+  const coTu = coGiaTri(q.tu_ngay);
+  const coDen = coGiaTri(q.den_ngay);
+  if ((coTu || coDen) && coGiaTri(q.quy)) {
+    throw loiKy('Chỉ chọn một trong hai: quy (kèm nam) hoặc tu_ngay/den_ngay.');
+  }
   if (coTu || coDen) {
-    const tu = coTu ? chuanNgay(coTu) : '';
-    const den = coDen ? chuanNgay(coDen) : '';
-    if ((coTu && !tu) || (coDen && !den)) throw loiKy('tu_ngay / den_ngay phải có dạng YYYY-MM-DD.');
+    const tu = coTu ? ngayLich(q.tu_ngay) : '';
+    const den = coDen ? ngayLich(q.den_ngay) : '';
+    if ((coTu && !tu) || (coDen && !den)) {
+      throw loiKy('tu_ngay / den_ngay phải là ngày hợp lệ dạng YYYY-MM-DD.');
+    }
     if (tu && den && tu > den) throw loiKy('tu_ngay không được sau den_ngay.');
     let tieuDe;
     if (tu && den) tieuDe = `TỪ NGÀY ${ngayHienThi(tu)} ĐẾN NGÀY ${ngayHienThi(den)}`;
@@ -446,15 +539,14 @@ function xacDinhKy(query = {}) {
       .filter(Boolean)
       .join(' - ');
     return {
-      loai: 'tuy_chon', tu, den, tieuDe,
+      loai: 'tuy_chon', tu, den, tieuDe, gomKhongNgay: true,
       tenSheet: tuyChonTenSheet(nhan),
       tenFile: [tu, den].filter(Boolean).join('_den_') || 'tuy_chon',
     };
   }
-  const nam = q.nam !== undefined && q.nam !== '' ? Number(q.nam) : new Date().getFullYear();
-  if (!Number.isInteger(nam) || nam < 2000 || nam > 2100) throw loiKy('nam không hợp lệ (2000-2100).');
-  if (q.quy !== undefined && q.quy !== '') {
-    const quy = Number(q.quy);
+  const nam = docNam(q);
+  if (coGiaTri(q.quy)) {
+    const quy = Number(String(q.quy).trim());
     if (!Number.isInteger(quy) || quy < 1 || quy > 4) throw loiKy('quy phải là 1, 2, 3 hoặc 4.');
     return kyQuy(nam, quy);
   }
@@ -464,6 +556,7 @@ function xacDinhKy(query = {}) {
     tieuDe: `NĂM ${nam}`,
     tenSheet: `NĂM ${nam}`,
     tenFile: `Nam_${nam}`,
+    gomKhongNgay: true,
   };
 }
 
@@ -483,6 +576,7 @@ function kyQuy(nam, quy) {
     tieuDe: `QUÝ ${la} / NĂM ${nam}`,
     tenSheet: `QUÝ ${la} - ${nam}`,
     tenFile: `Quy_${la}_${nam}`,
+    gomKhongNgay: false,
   };
 }
 
@@ -517,15 +611,15 @@ function layDuLieuTuDb() {
   return { phieuNhap, phieuXuat };
 }
 
+// Các dòng của 1 kỳ (đã lọc theo từng phần nhập/xuất, xem taoDongSoTongHop).
+function dongCuaKy(ky, duLieu) {
+  return taoDongSoTongHop(duLieu.phieuNhap, duLieu.phieuXuat, ky);
+}
+
 // Dữ liệu 1 kỳ (JSON cho màn xem trước): {ky, dong, tong, canh_bao, so_dong}.
 function layDuLieuKy(ky, duLieu) {
   const dl = duLieu || layDuLieuTuDb();
-  const tatCa = taoDongSoTongHop(dl.phieuNhap, dl.phieuXuat);
-  return duLieuKyTuDong(ky, tatCa);
-}
-
-function duLieuKyTuDong(ky, tatCaDong) {
-  const dong = locTheoKy(tatCaDong, ky.tu, ky.den);
+  const dong = dongCuaKy(ky, dl);
   return {
     ky: { loai: ky.loai, nam: ky.nam || null, quy: ky.quy || null, tu_ngay: ky.tu, den_ngay: ky.den, tieu_de: ky.tieuDe },
     dong,
@@ -723,6 +817,7 @@ function veSheet(wb, { tenSheet, tieuDe, tenDonVi, dong }) {
   const canhBaoGhi = [];
   let coNhom337 = false;
   let soDongTinhLai = 0;
+  let soDongNhapNgoaiKy = 0;
 
   hang.forEach((d, i) => {
     const r = HANG_DAU_DU_LIEU + i;
@@ -751,13 +846,15 @@ function veSheet(wb, { tenSheet, tieuDe, tenDonVi, dong }) {
       [9, d.ten_hang], [10, d.tk_doi_ung], [11, d.tieu_muc], [12, d.dvt],
     ];
     for (const [c, v] of chu) {
-      if (v) ws.getCell(r, c).value = v;
+      if (v) ws.getCell(r, c).value = sach(v);
       if (v && ws.getCell(r, c).alignment.wrapText) {
         soDongChu = Math.max(soDongChu, demDong(v, DO_RONG_COT[c - 1]));
       }
     }
-    ws.getRow(r).height = soDongChu <= 1 ? 15 : Math.round((soDongChu * 10.9 + 0.5) * 4) / 4;
+    // Excel giới hạn chiều cao dòng 409.5pt.
+    ws.getRow(r).height = soDongChu <= 1 ? 15 : Math.min(409.5, Math.round((soDongChu * 10.9 + 0.5) * 4) / 4);
     if (d.dg_tinh_lai) soDongTinhLai += 1;
+    if (d.tham_chieu_nhap) soDongNhapNgoaiKy += 1;
 
     // Số liệu rơi vào nhóm TK661.2 (cột M-U) hay TK 337 (cột V-AD).
     const b = d.nhom === '337' ? 22 : 13;
@@ -767,21 +864,31 @@ function veSheet(wb, { tenSheet, tieuDe, tenDonVi, dong }) {
       const cell = ws.getCell(r, b + c);
       cell.value = congThuc ? { formula: congThuc, result: giaTri } : giaTri;
     };
+    // Thành tiền làm tròn đến đồng (khớp cách tính của phiếu nhập/xuất).
     if (d.co_nhap) {
       dat(0, d.sl_nhap);
       dat(1, d.dg_nhap);
-      dat(2, d.tt_nhap, `${L(0)}${r}*${L(1)}${r}`);
+      dat(2, d.tt_nhap, `ROUND(${L(0)}${r}*${L(1)}${r},0)`);
     }
     if (d.co_xuat) {
       dat(3, d.sl_xuat);
       dat(4, d.dg_xuat);
-      dat(5, d.tt_xuat, `${L(3)}${r}*${L(4)}${r}`);
+      dat(5, d.tt_xuat, `ROUND(${L(3)}${r}*${L(4)}${r},0)`);
     }
     if (d.co_ton) {
-      // Tồn = Nhập − Xuất; dòng xuất tiếp theo trừ dần vào số tồn của dòng ngay trên.
-      dat(6, d.sl_ton, d.tiep ? `${L(6)}${r - 1}-${L(3)}${r}` : `${L(0)}${r}-${L(3)}${r}`);
-      dat(7, d.dg_ton, d.tiep ? `${L(7)}${r - 1}` : `${L(1)}${r}`);
-      dat(8, d.tt_ton, `${L(6)}${r}*${L(7)}${r}`);
+      // Tồn = Nhập − Xuất; dòng xuất tiếp theo trừ dần vào số tồn của dòng ngay trên. Nếu dòng
+      // nhập/xuất trước nằm ngoài sheet (kỳ khác) thì Tồn là giá trị lũy kế cố định.
+      if (d.ton_cong_thuc === 'chinh') {
+        dat(6, d.sl_ton, `${L(0)}${r}-${L(3)}${r}`);
+        dat(7, d.dg_ton, `${L(1)}${r}`);
+      } else if (d.ton_cong_thuc === 'tiep') {
+        dat(6, d.sl_ton, `${L(6)}${r - 1}-${L(3)}${r}`);
+        dat(7, d.dg_ton, `${L(7)}${r - 1}`);
+      } else {
+        dat(6, d.sl_ton);
+        dat(7, d.dg_ton);
+      }
+      dat(8, d.tt_ton, `ROUND(${L(6)}${r}*${L(7)}${r},0)`);
       if (d.sl_ton < -1e-9) {
         const cell = ws.getCell(r, b + 6);
         cell.font = { ...FONT, color: { argb: 'FFFF0000' }, bold: true };
@@ -790,11 +897,10 @@ function veSheet(wb, { tenSheet, tieuDe, tenDonVi, dong }) {
     d.canh_bao.forEach((nd) => canhBaoGhi.push({ r, ten: d.ten_hang, nd }));
   });
 
-  // Dòng tổng cộng: SUM đúng phạm vi dòng dữ liệu của sheet này.
-  const duocTong = (c) => {
-    const idx = (c - 13) % 9;
-    return TONG_CA_DON_GIA || idx % 3 !== 1;
-  };
+  // Dòng tổng cộng. Nhập và Xuất = SUM đúng phạm vi dòng dữ liệu của sheet này; Tồn = Nhập − Xuất
+  // (không SUM cột Tồn vì Tồn từng dòng là số lũy kế, cộng lại sẽ tính trùng).
+  // Ô Đơn giá ở dòng tổng để trống (TONG_CA_DON_GIA = false).
+  const cotNhom = (b) => (k) => chuCot(b + k);
   for (let c = 1; c <= SO_COT; c++) {
     const cell = ws.getCell(hangTong, c);
     cell.font = { ...FONT, bold: true };
@@ -802,19 +908,47 @@ function veSheet(wb, { tenSheet, tieuDe, tenDonVi, dong }) {
     cell.border = { left: MONG, right: MONG, top: TOC, bottom: MONG };
     const kieu = kieuODuLieu(c, { dau: false, dgThapPhan: false });
     cell.alignment = { ...kieu.alignment, wrapText: false, horizontal: c >= 13 ? 'right' : 'center' };
-    // Tổng số lượng nằm ở cột hẹp (4.5-4.6) nên dùng #,##0 (không đệm 2 bên như NUMFMT) để không hiện ###.
-    cell.numFmt = c >= 13 ? ((c - 13) % 3 === 0 ? '#,##0' : NUMFMT) : 'General';
-    if (c >= 13 && duocTong(c)) {
-      const cl = chuCot(c);
-      cell.value = { formula: `SUM(${cl}${HANG_DAU_DU_LIEU}:${cl}${hangCuoi})`, result: tongCot(hang, c) };
+    // Số lượng tổng: General để không làm tròn số lẻ (vd 360.5); cột tiền dùng NUMFMT như mẫu.
+    cell.numFmt = c >= 13 ? ((c - 13) % 3 === 0 ? 'General' : NUMFMT) : 'General';
+    if (c === 9) cell.value = 'TỔNG CỘNG';
+    if (c < 13) continue;
+    const b = c >= 22 ? 22 : 13;
+    const off = c - b;
+    const L = cotNhom(b);
+    const cl = chuCot(c);
+    const sum = () => ({
+      formula: `SUM(${cl}${HANG_DAU_DU_LIEU}:${cl}${hangCuoi})`,
+      result: tongCot(hang, c),
+    });
+    if (off === 0 || off === 2 || off === 3 || off === 5) {
+      cell.value = sum();
+    } else if (off === 1 || off === 4 || off === 7) {
+      if (TONG_CA_DON_GIA) cell.value = sum();
+    } else if (off === 6) {
+      cell.value = {
+        formula: `${L(0)}${hangTong}-${L(3)}${hangTong}`,
+        result: r4(tongCot(hang, b + 0) - tongCot(hang, b + 3)),
+      };
+    } else if (off === 8) {
+      cell.value = {
+        formula: `${L(2)}${hangTong}-${L(5)}${hangTong}`,
+        result: r4(tongCot(hang, b + 2) - tongCot(hang, b + 5)),
+      };
     }
   }
   ws.getRow(hangTong).height = 15;
+  // Bộ lọc dòng tiêu đề (mẫu có autoFilter A8:AD...).
+  ws.autoFilter = `A8:${chuCot(SO_COT)}${hangCuoi}`;
 
   // Ghi chú / cảnh báo bên dưới bảng (ngoài khung) — để không có gì "im lặng": tồn âm, dòng
   // xuất chưa ghép được nhập, nguồn kinh phí lệch...
   const ghiChu = [];
   if (!coDuLieu) ghiChu.push('Không có phát sinh nhập / xuất vật tư trong kỳ này.');
+  if (soDongNhapNgoaiKy) {
+    ghiChu.push(
+      `${soDongNhapNgoaiKy} dòng xuất có phần Nhập để trống vì hàng nhập ở kỳ khác; cột Tồn của các dòng này là số tồn lũy kế theo cả chuỗi nhập-xuất.`
+    );
+  }
   const tonAm = canhBaoGhi.filter((x) => x.nd.startsWith('Tồn âm'));
   const khacTonAm = canhBaoGhi.filter((x) => !x.nd.startsWith('Tồn âm'));
   tonAm.slice(0, 20).forEach((x) => ghiChu.push(`Dòng ${x.r} - ${x.ten}: ${x.nd}`));
@@ -844,14 +978,15 @@ function veSheet(wb, { tenSheet, tieuDe, tenDonVi, dong }) {
         cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
       }
       const o = ws.getCell(r, 1);
-      o.value = (i === 0 ? 'Ghi chú: ' : '') + t;
+      o.value = sach((i === 0 ? 'Ghi chú: ' : '') + t);
       if (/Tồn âm/.test(t)) o.font = { ...FONT, italic: true, color: { argb: 'FFFF0000' } };
       ws.getRow(r).height = 12.75;
       hangCuoiVung = r;
     });
   }
 
-  // Cài đặt in (sao chép từ mẫu): A4 ngang, lề, tiêu đề lặp dòng 6-8, chân trang "Page n".
+  // Cài đặt in: A4 ngang, lề, tiêu đề lặp dòng 6-8, chân trang "Page n" (như mẫu). Mẫu in
+  // scale 95; vì cột D/H được nới nên dùng vừa-khít-chiều-ngang (1 trang rộng, nhiều trang dài).
   const cotCuoiIn = coNhom337 ? SO_COT : 21; // mẫu chỉ in A..U; có số liệu TK 337 thì in tới AD
   ws.pageSetup = {
     paperSize: 9,
@@ -860,8 +995,9 @@ function veSheet(wb, { tenSheet, tieuDe, tenDonVi, dong }) {
     verticalDpi: 300,
     pageOrder: 'downThenOver',
     scale: 95,
-    fitToPage: coNhom337,
-    ...(coNhom337 ? { fitToWidth: 1, fitToHeight: 0 } : {}),
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
     margins: {
       left: 0.279861111111111, right: 0.159722222222222,
       top: 0.290277777777778, bottom: 0.310416666666667,
@@ -886,6 +1022,8 @@ function cotDonGia(d, c) {
   return null;
 }
 
+// Tổng theo cột dữ liệu (chỉ gồm các dòng thuộc đúng nhóm TK của cột đó). Cột c là cột Excel
+// 1-based; chỉ dùng cho nhóm Nhập/Xuất (Tồn tính bằng hiệu).
 function tongCot(hang, c) {
   const b = c >= 22 ? 22 : 13;
   const off = c - b;
@@ -898,8 +1036,8 @@ function tongCot(hang, c) {
   return r4(s);
 }
 
-// kyList: [{tenSheet, tieuDe, tu, den}] — mỗi kỳ 1 sheet. tatCaDong: kết quả taoDongSoTongHop.
-function taoWorkbook({ tenDonVi, kyList, tatCaDong }) {
+// kyList: [{tenSheet, tieuDe, tu, den, gomKhongNgay}] — mỗi kỳ 1 sheet.
+function taoWorkbook({ tenDonVi, kyList, duLieu }) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Kho vat tu';
   wb.created = new Date();
@@ -909,7 +1047,7 @@ function taoWorkbook({ tenDonVi, kyList, tatCaDong }) {
       tenSheet: ky.tenSheet,
       tieuDe: ky.tieuDe,
       tenDonVi,
-      dong: locTheoKy(tatCaDong, ky.tu, ky.den),
+      dong: dongCuaKy(ky, duLieu),
     });
   }
   return wb;
@@ -921,14 +1059,15 @@ async function xuatTongHop(query, tuyChon = {}) {
   const dl = tuyChon.duLieu || layDuLieuTuDb();
   const tenDonVi =
     tuyChon.tenDonVi !== undefined ? tuyChon.tenDonVi : require('../db').layCauHinh().ten_don_vi;
-  const tatCaDong = taoDongSoTongHop(dl.phieuNhap, dl.phieuXuat);
 
   let kyList;
   let tenFile;
   const cacQuy = ['1', 'true', 'yes', 'on'].includes(String(q.cac_quy || '').toLowerCase());
   if (cacQuy) {
-    const nam = q.nam !== undefined && q.nam !== '' ? Number(q.nam) : new Date().getFullYear();
-    if (!Number.isInteger(nam) || nam < 2000 || nam > 2100) throw loiKy('nam không hợp lệ (2000-2100).');
+    if (coGiaTri(q.quy) || coGiaTri(q.tu_ngay) || coGiaTri(q.den_ngay)) {
+      throw loiKy('cac_quy=1 chỉ đi với nam; không kèm quy / tu_ngay / den_ngay.');
+    }
+    const nam = docNam(q);
     kyList = cacQuyCuaNam(nam);
     tenFile = `Cac_quy_${nam}`;
   } else {
@@ -936,21 +1075,20 @@ async function xuatTongHop(query, tuyChon = {}) {
     kyList = [ky];
     tenFile = ky.tenFile;
   }
-  const wb = taoWorkbook({ tenDonVi, kyList, tatCaDong });
+  const wb = taoWorkbook({ tenDonVi, kyList, duLieu: dl });
   const buffer = await wb.xlsx.writeBuffer();
   return { buffer, tenFile: `Tong_hop_nhap_xuat_vat_tu_${tenFile}.xlsx`, kyList };
 }
 
 module.exports = {
   taoDongSoTongHop,
-  locTheoKy,
   tinhTong,
   gomCanhBao,
   xacDinhKy,
   cacQuyCuaNam,
   layDuLieuTuDb,
   layDuLieuKy,
-  duLieuKyTuDong,
+  dongCuaKy,
   taoWorkbook,
   xuatTongHop,
 };
