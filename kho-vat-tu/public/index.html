@@ -21,6 +21,7 @@
       <div class="nav-item" data-tab="phieu-xuat"><span class="icon"><i class="fas fa-truck-fast"></i></span>Phiếu xuất</div>
       <div class="nav-item" data-tab="tao-nhap" data-nhom="tao-phieu"><span class="icon"><i class="fas fa-file-circle-plus"></i></span>Tạo phiếu</div>
       <div class="nav-item" data-tab="tach-xuat"><span class="icon"><i class="fas fa-code-fork"></i></span>Tách phiếu xuất</div>
+      <div class="nav-item" data-tab="theo-doi"><span class="icon"><i class="fas fa-table-list"></i></span>Theo dõi N/X</div>
     </div>
   </nav>
 
@@ -262,6 +263,122 @@
         <button class="btn btn-primary" id="tx-tao-phieu"><i class="fas fa-code-fork"></i> Tạo phiếu xuất</button>
       </div>
     </section>
+
+    <!-- THEO DÕI NHẬP XUẤT (SỔ TỔNG HỢP) -->
+    <section id="theo-doi" class="page">
+      <div class="ui-head">
+        <div>
+          <h1>Theo dõi nhập xuất vật tư</h1>
+          <p>Sổ tổng hợp theo mẫu Excel — bảng dưới chỉ hiển thị các cột thường dùng; bấm <b>Chi tiết</b> để xem/sửa toàn bộ trường.</p>
+        </div>
+        <div class="ui-head-actions">
+          <a class="btn btn-neutral" href="/api/theo-doi/xuat-excel" id="td-xuat-excel"><i class="fas fa-file-excel"></i> Xuất Excel</a>
+          <button class="btn btn-primary" type="button" id="td-them-dong"><i class="fas fa-plus"></i> Thêm dòng</button>
+        </div>
+      </div>
+      <div class="ui-card">
+        <div class="ui-card-body">
+          <div class="ui-form-grid cot-2">
+            <div class="ui-field">
+              Sheet (quý/kỳ)
+              <select id="td-chon-sheet" class="ui-input"></select>
+            </div>
+            <div class="ui-field">
+              Tiêu đề kỳ trên Excel (dòng 4)
+              <input id="td-tieu-de-sheet" class="ui-input" placeholder="QUÝ I / NĂM 2026" />
+            </div>
+          </div>
+          <div style="text-align:right;margin-top:8px">
+            <button class="btn btn-neutral btn-sm" type="button" id="td-luu-sheet"><i class="fas fa-floppy-disk"></i> Lưu tiêu đề sheet</button>
+          </div>
+        </div>
+      </div>
+      <div class="ui-card">
+        <div class="ui-table-scroll">
+          <table class="ui-table">
+            <thead>
+              <tr>
+                <th>Ngày nhập</th><th>Phiếu nhập</th><th>Ngày xuất</th><th>Phiếu xuất</th>
+                <th>Trích yếu</th><th>ĐVT</th><th class="num">SL nhập</th><th class="num">SL xuất</th><th class="num">Tồn SL</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="bang-theo-doi"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div id="td-overlay" class="ui-overlay" aria-hidden="true">
+      <div class="ui-dialog" role="dialog" aria-labelledby="td-dialog-title">
+        <div class="ui-dialog-head">
+          <h2 id="td-dialog-title">Chi tiết dòng theo dõi</h2>
+          <button type="button" class="btn btn-neutral btn-sm" id="td-dong-dialog"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="ui-dialog-body">
+          <input type="hidden" id="td-dong-id" />
+          <fieldset class="ui-fieldset">
+            <legend>Nhập kho</legend>
+            <div class="ui-form-grid">
+              <div class="ui-field">Ngày nhập<input id="td-ngay-nhap" class="ui-input" placeholder="dd/mm/yyyy" /></div>
+              <div class="ui-field">Phiếu nhập<input id="td-phieu-nhap" class="ui-input" /></div>
+              <div class="ui-field">Người nhập<input id="td-nguoi-nhap" class="ui-input" /></div>
+              <div class="ui-field">Đơn vị công tác (nhập)<input id="td-don-vi-nhap" class="ui-input" /></div>
+            </div>
+          </fieldset>
+          <fieldset class="ui-fieldset">
+            <legend>Xuất kho</legend>
+            <div class="ui-form-grid">
+              <div class="ui-field">Ngày xuất<input id="td-ngay-xuat" class="ui-input" placeholder="dd/mm/yyyy" /></div>
+              <div class="ui-field">Phiếu xuất<input id="td-phieu-xuat" class="ui-input" /></div>
+              <div class="ui-field">Người lĩnh<input id="td-nguoi-linh" class="ui-input" /></div>
+              <div class="ui-field">Đơn vị công tác (lĩnh)<input id="td-don-vi-linh" class="ui-input" /></div>
+            </div>
+          </fieldset>
+          <fieldset class="ui-fieldset">
+            <legend>Hàng hóa</legend>
+            <div class="ui-form-grid">
+              <div class="ui-field span-2">Trích yếu<input id="td-trich-yeu" class="ui-input" /></div>
+              <div class="ui-field">TK đối ứng<input id="td-tk-doi-ung" class="ui-input" /></div>
+              <div class="ui-field">Tiểu mục<input id="td-tieu-muc" class="ui-input" /></div>
+              <div class="ui-field">Đơn vị tính<input id="td-dvt" class="ui-input" /></div>
+            </div>
+          </fieldset>
+          <fieldset class="ui-fieldset">
+            <legend>TK 661.2 — Nhập / Xuất / Tồn</legend>
+            <div class="ui-form-grid">
+              <div class="ui-field">SL nhập<input id="td-sl-nhap-661" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Đơn giá nhập<input id="td-dg-nhap-661" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Thành tiền nhập<input id="td-tt-nhap-661" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">SL xuất<input id="td-sl-xuat-661" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Đơn giá xuất<input id="td-dg-xuat-661" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Thành tiền xuất<input id="td-tt-xuat-661" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">SL tồn<input id="td-sl-ton-661" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Đơn giá tồn<input id="td-dg-ton-661" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Thành tiền tồn<input id="td-tt-ton-661" class="ui-input" type="number" step="any" /></div>
+            </div>
+          </fieldset>
+          <fieldset class="ui-fieldset">
+            <legend>TK 337 — Nhập / Xuất / Tồn</legend>
+            <div class="ui-form-grid">
+              <div class="ui-field">SL nhập<input id="td-sl-nhap-337" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Đơn giá nhập<input id="td-dg-nhap-337" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Thành tiền nhập<input id="td-tt-nhap-337" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">SL xuất<input id="td-sl-xuat-337" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Đơn giá xuất<input id="td-dg-xuat-337" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Thành tiền xuất<input id="td-tt-xuat-337" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">SL tồn<input id="td-sl-ton-337" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Đơn giá tồn<input id="td-dg-ton-337" class="ui-input" type="number" step="any" /></div>
+              <div class="ui-field">Thành tiền tồn<input id="td-tt-ton-337" class="ui-input" type="number" step="any" /></div>
+            </div>
+          </fieldset>
+          <div id="td-loi" class="ui-note danger" style="display:none"></div>
+        </div>
+        <div class="ui-dialog-foot">
+          <button type="button" class="btn btn-neutral" id="td-huy">Hủy</button>
+          <button type="button" class="btn btn-primary" id="td-luu-dong"><i class="fas fa-floppy-disk"></i> Lưu dòng</button>
+        </div>
+      </div>
+    </div>
 
     <!-- CẤU HÌNH MẪU PHIẾU NHẬP -->
     <section id="cau-hinh-nhap" class="page cau-hinh-page" data-loai="nhap">

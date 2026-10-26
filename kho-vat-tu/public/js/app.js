@@ -61,6 +61,7 @@ function chuyenTab(tab) {
   if (tab === 'tach-xuat') taiDanhSachPhieuNhapChoChon('tx-phieu-nhap');
   if (tab === 'cau-hinh-nhap') taiCauHinh('nhap');
   if (tab === 'cau-hinh-xuat') taiCauHinh('xuat');
+  if (tab === 'theo-doi') taiTheoDoi();
 }
 
 // ===== TỒN KHO =====
@@ -839,6 +840,155 @@ document.querySelectorAll('.ch-luu').forEach((nut) => nut.addEventListener('clic
   }
   ketQuaEl.style.display = 'flex';
 }));
+
+// ===== THEO DÕI NHẬP XUẤT (sổ Excel) =====
+const TD_MAP = [
+  ['ngay_nhap', 'td-ngay-nhap'], ['phieu_nhap', 'td-phieu-nhap'], ['nguoi_nhap', 'td-nguoi-nhap'], ['don_vi_nhap', 'td-don-vi-nhap'],
+  ['ngay_xuat', 'td-ngay-xuat'], ['phieu_xuat', 'td-phieu-xuat'], ['nguoi_linh', 'td-nguoi-linh'], ['don_vi_linh', 'td-don-vi-linh'],
+  ['trich_yeu', 'td-trich-yeu'], ['tk_doi_ung', 'td-tk-doi-ung'], ['tieu_muc', 'td-tieu-muc'], ['dvt', 'td-dvt'],
+  ['sl_nhap_661', 'td-sl-nhap-661'], ['don_gia_nhap_661', 'td-dg-nhap-661'], ['thanh_tien_nhap_661', 'td-tt-nhap-661'],
+  ['sl_xuat_661', 'td-sl-xuat-661'], ['don_gia_xuat_661', 'td-dg-xuat-661'], ['thanh_tien_xuat_661', 'td-tt-xuat-661'],
+  ['sl_ton_661', 'td-sl-ton-661'], ['don_gia_ton_661', 'td-dg-ton-661'], ['thanh_tien_ton_661', 'td-tt-ton-661'],
+  ['sl_nhap_337', 'td-sl-nhap-337'], ['don_gia_nhap_337', 'td-dg-nhap-337'], ['thanh_tien_nhap_337', 'td-tt-nhap-337'],
+  ['sl_xuat_337', 'td-sl-xuat-337'], ['don_gia_xuat_337', 'td-dg-xuat-337'], ['thanh_tien_xuat_337', 'td-tt-xuat-337'],
+  ['sl_ton_337', 'td-sl-ton-337'], ['don_gia_ton_337', 'td-dg-ton-337'], ['thanh_tien_ton_337', 'td-tt-ton-337'],
+];
+let tdSheets = [];
+
+function tdSheetDangChon() {
+  const id = Number(document.getElementById('td-chon-sheet').value);
+  return tdSheets.find((s) => s.id === id) || tdSheets[0];
+}
+
+async function taiTheoDoi() {
+  tdSheets = await goiApi('/api/theo-doi/sheet');
+  const sel = document.getElementById('td-chon-sheet');
+  const prev = sel.value;
+  sel.innerHTML = tdSheets.map((s) => `<option value="${s.id}">${s.ten_sheet}</option>`).join('');
+  if (prev && tdSheets.some((s) => String(s.id) === prev)) sel.value = prev;
+  capNhatTieuDeSheet();
+  await taiBangTheoDoi();
+}
+
+function capNhatTieuDeSheet() {
+  const s = tdSheetDangChon();
+  document.getElementById('td-tieu-de-sheet').value = s?.tieu_de || '';
+}
+
+async function taiBangTheoDoi() {
+  const tbody = document.getElementById('bang-theo-doi');
+  tbody.innerHTML = oTrong(10, 'spinner', 'Đang tải...');
+  const sheet = tdSheetDangChon();
+  const rows = await goiApi('/api/theo-doi/dong' + (sheet ? `?sheet_id=${sheet.id}` : ''));
+  if (rows.length === 0) {
+    tbody.innerHTML = oTrong(10, 'table', 'Chưa có dòng nào. Bấm "Thêm dòng" để bắt đầu.');
+    return;
+  }
+  tbody.innerHTML = '';
+  rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.ngay_nhap || ''}</td><td>${r.phieu_nhap || ''}</td>
+      <td>${r.ngay_xuat || ''}</td><td>${r.phieu_xuat || ''}</td>
+      <td>${r.trich_yeu || ''}</td><td>${r.dvt || ''}</td>
+      <td class="num">${formatSo(r.sl_nhap_661)}</td><td class="num">${formatSo(r.sl_xuat_661)}</td>
+      <td class="num">${formatSo(r.sl_ton_661)}</td>
+      <td>
+        <button class="btn btn-sm btn-neutral" data-td-sua="${r.id}"><i class="fas fa-pen"></i> Chi tiết</button>
+        <button class="btn btn-sm btn-danger" data-td-xoa="${r.id}"><i class="fas fa-trash"></i></button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('[data-td-sua]').forEach((b) => b.addEventListener('click', () => moDialogTheoDoi(Number(b.dataset.tdSua))));
+  tbody.querySelectorAll('[data-td-xoa]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('Xóa dòng theo dõi này?')) return;
+    await goiApi('/api/theo-doi/dong/' + b.dataset.tdXoa, { method: 'DELETE' });
+    taiBangTheoDoi();
+  }));
+}
+
+function docFormTheoDoi() {
+  const body = { sheet_id: tdSheetDangChon()?.id };
+  TD_MAP.forEach(([k, id]) => {
+    const el = document.getElementById(id);
+    body[k] = el.value.trim();
+  });
+  return body;
+}
+
+function dienFormTheoDoi(row) {
+  document.getElementById('td-dong-id').value = row?.id || '';
+  TD_MAP.forEach(([k, id]) => {
+    const el = document.getElementById(id);
+    const v = row?.[k];
+    el.value = v === null || v === undefined ? '' : v;
+  });
+}
+
+function moDialogTheoDoi(id) {
+  const overlay = document.getElementById('td-overlay');
+  hienLoi(document.getElementById('td-loi'), '');
+  if (!id) {
+    dienFormTheoDoi({});
+    document.getElementById('td-dialog-title').textContent = 'Thêm dòng theo dõi';
+    overlay.classList.add('open');
+    return;
+  }
+  goiApi('/api/theo-doi/dong/' + id).then((row) => {
+    dienFormTheoDoi(row);
+    document.getElementById('td-dialog-title').textContent = 'Chi tiết dòng theo dõi';
+    overlay.classList.add('open');
+  }).catch((err) => alert(err.message));
+}
+
+function dongDialogTheoDoi() {
+  document.getElementById('td-overlay').classList.remove('open');
+}
+
+document.getElementById('td-chon-sheet').addEventListener('change', () => {
+  capNhatTieuDeSheet();
+  taiBangTheoDoi();
+});
+document.getElementById('td-luu-sheet').addEventListener('click', async () => {
+  const s = tdSheetDangChon();
+  if (!s) return;
+  try {
+    await goiApi('/api/theo-doi/sheet/' + s.id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tieu_de: document.getElementById('td-tieu-de-sheet').value.trim() }),
+    });
+    await taiTheoDoi();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+document.getElementById('td-them-dong').addEventListener('click', () => moDialogTheoDoi(null));
+document.getElementById('td-dong-dialog').addEventListener('click', dongDialogTheoDoi);
+document.getElementById('td-huy').addEventListener('click', dongDialogTheoDoi);
+document.getElementById('td-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'td-overlay') dongDialogTheoDoi();
+});
+document.getElementById('td-luu-dong').addEventListener('click', async () => {
+  const loi = document.getElementById('td-loi');
+  const id = document.getElementById('td-dong-id').value;
+  const body = docFormTheoDoi();
+  if (!body.trich_yeu) {
+    hienLoi(loi, 'Trích yếu (tên hàng) không được để trống.');
+    return;
+  }
+  try {
+    if (id) {
+      await goiApi('/api/theo-doi/dong/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    } else {
+      await goiApi('/api/theo-doi/dong', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    }
+    dongDialogTheoDoi();
+    taiBangTheoDoi();
+  } catch (err) {
+    hienLoi(loi, err.message);
+  }
+});
 
 // ===== Khởi động =====
 veBangDongNhap();

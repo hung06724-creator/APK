@@ -12,6 +12,7 @@ app.use('/api/phieu-nhap', require('./src/routes/phieuNhap'));
 app.use('/api/phieu-xuat', require('./src/routes/phieuXuat'));
 app.use('/api/upload', require('./src/routes/upload'));
 app.use('/api/cau-hinh', require('./src/routes/cauHinh'));
+app.use('/api/theo-doi', require('./src/routes/theoDoi'));
 
 app.use((err, req, res, next) => {
   console.error(err);

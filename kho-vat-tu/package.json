@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "import-excel": "node scripts/import-excel.js"
+    "import-excel": "node scripts/import-excel.js",
+    "build-theo-doi-template": "python3 scripts/theo-doi-excel.py clean --src ../uploads/theo-doi-nhap-xuat_e6e5.xls --dest templates/theo-doi-nhap-xuat-mau.xls",
+    "test": "node --test test/*.test.js"
   },
   "license": "UNLICENSED",
   "dependencies": {
