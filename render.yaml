@@ -4,7 +4,7 @@ services:
     runtime: node
     rootDir: kho-vat-tu
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && (command -v python3 >/dev/null && pip3 install --user -r scripts/requirements-theo-doi.txt || true)
     startCommand: npm start
     envVars:
       - key: NODE_VERSION

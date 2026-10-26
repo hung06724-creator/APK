@@ -70,6 +70,9 @@ router.get('/dong/:id', (req, res) => {
 router.post('/dong', (req, res) => {
   const sheetId = Number(req.body?.sheet_id);
   if (!sheetId) return res.status(400).json({ error: 'Cần chọn sheet (sheet_id)' });
+  if (!String(req.body?.trich_yeu || '').trim()) {
+    return res.status(400).json({ error: 'Trích yếu (tên hàng) không được để trống' });
+  }
   const sheet = db.prepare('SELECT id FROM theo_doi_sheet WHERE id = ?').get(sheetId);
   if (!sheet) return res.status(400).json({ error: 'Sheet không hợp lệ' });
   const dong = chuanHoaDong(req.body, sheetId);
@@ -86,6 +89,10 @@ router.put('/dong/:id', (req, res) => {
   const id = Number(req.params.id);
   const existing = db.prepare('SELECT * FROM theo_doi_dong WHERE id = ?').get(id);
   if (!existing) return res.status(404).json({ error: 'Không tìm thấy dòng' });
+  const trichYeu = req.body.trich_yeu !== undefined ? req.body.trich_yeu : existing.trich_yeu;
+  if (!String(trichYeu || '').trim()) {
+    return res.status(400).json({ error: 'Trích yếu (tên hàng) không được để trống' });
+  }
   const sheetId = req.body.sheet_id !== undefined ? Number(req.body.sheet_id) : existing.sheet_id;
   const dong = chuanHoaDong({ ...existing, ...req.body }, sheetId);
   const sets = THEO_DOI_DONG_FIELDS.map((k) => `${k} = @${k}`).join(', ');

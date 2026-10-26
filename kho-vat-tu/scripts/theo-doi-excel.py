@@ -164,8 +164,7 @@ def _fill_sheet(sh, rows: List[Dict[str, Any]], tieu_de: Optional[str]) -> int:
     total_row = last_data + 1
     first = DATA_START_ROW + 1
     last = last_data + 1
-    for col_letter_idx in (12, 13, 14, 15, 16, 17, 18, 19, 20):  # M-U
-        c = col_letter_idx
+    for c in range(12, 30):  # M–AD: TK 661 + TK 337 (SL, đơn giá, thành tiền)
         letter = _colname(c)
         sh.write(total_row, c, xlwt.Formula(f"SUM({letter}{first}:{letter}{last})"))
     return total_row

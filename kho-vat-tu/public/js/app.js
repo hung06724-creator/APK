@@ -21,6 +21,13 @@ function hienLoi(el, noiDung) {
 function oTrong(colspan, bieuTuong, noiDung) {
   return `<tr><td colspan="${colspan}"><div class="ui-empty"><i class="fas fa-${bieuTuong}"></i>${noiDung}</div></td></tr>`;
 }
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 // ===== Chuyển tab (menu bên) =====
 document.querySelectorAll('.sidebar .nav-item[data-tab]').forEach((btn) => {
@@ -888,9 +895,9 @@ async function taiBangTheoDoi() {
   rows.forEach((r) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${r.ngay_nhap || ''}</td><td>${r.phieu_nhap || ''}</td>
-      <td>${r.ngay_xuat || ''}</td><td>${r.phieu_xuat || ''}</td>
-      <td>${r.trich_yeu || ''}</td><td>${r.dvt || ''}</td>
+      <td>${escapeHtml(r.ngay_nhap)}</td><td>${escapeHtml(r.phieu_nhap)}</td>
+      <td>${escapeHtml(r.ngay_xuat)}</td><td>${escapeHtml(r.phieu_xuat)}</td>
+      <td>${escapeHtml(r.trich_yeu)}</td><td>${escapeHtml(r.dvt)}</td>
       <td class="num">${formatSo(r.sl_nhap_661)}</td><td class="num">${formatSo(r.sl_xuat_661)}</td>
       <td class="num">${formatSo(r.sl_ton_661)}</td>
       <td>
