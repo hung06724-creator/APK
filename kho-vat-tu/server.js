@@ -16,7 +16,9 @@ app.use('/api/tong-hop', require('./src/routes/tongHop'));
 
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).json({ error: err.message || 'Lỗi không xác định' });
+  // Lỗi do người dùng gửi (JSON hỏng, file sai loại, file quá lớn...) là 4xx, không phải lỗi server.
+  const status = err.status || (err.name === 'MulterError' ? 400 : 500);
+  res.status(status).json({ error: err.message || 'Lỗi không xác định' });
 });
 
 const PORT = process.env.PORT || 3000;

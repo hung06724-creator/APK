@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, findOrCreateVatTu, layCauHinh } = require('../db');
+const { db, findOrCreateVatTu, tonKhoCuaVatTu, layCauHinh } = require('../db');
 const { soTienBangChu } = require('../services/soTienBangChu');
 const { taoFilePhieu } = require('../services/xuatMauPhieu');
 const { chuanHoaNguonKinhPhi, laNguonKinhPhiHopLe, chuoiHoacNull } = require('../services/ghepNhapXuat');
@@ -42,6 +42,9 @@ router.post('/', (req, res) => {
   const b = req.body || {};
   const items = Array.isArray(b.items) ? b.items : [];
   if (items.length === 0) return res.status(400).json({ error: 'Phiếu nhập cần ít nhất 1 dòng hàng hóa' });
+  if (items.some((it) => (Number(it.sl_thuc_nhap) || 0) < 0 || (Number(it.don_gia) || 0) < 0)) {
+    return res.status(400).json({ error: 'Số lượng và đơn giá không được âm' });
+  }
 
   const tx = db.transaction(() => {
     let tongTienHang = 0;
@@ -166,7 +169,24 @@ router.put('/:id/so-sach', (req, res) => {
   res.json({ ...moi, items });
 });
 
+// Không cho xóa phiếu nhập nếu hàng của phiếu đó đã xuất đi một phần/toàn bộ — xóa sẽ làm tồn kho âm.
 router.delete('/:id', (req, res) => {
+  const items = db.prepare('SELECT vat_tu_id, SUM(sl_thuc_nhap) AS sl FROM phieu_nhap_items WHERE phieu_nhap_id = ? AND vat_tu_id IS NOT NULL GROUP BY vat_tu_id').all(req.params.id);
+  const thieuHut = [];
+  for (const it of items) {
+    const ton = tonKhoCuaVatTu(it.vat_tu_id);
+    if (ton - it.sl < 0) {
+      const vatTu = db.prepare('SELECT ten_hang FROM vat_tu WHERE id = ?').get(it.vat_tu_id);
+      thieuHut.push({ ten_hang: vatTu ? vatTu.ten_hang : `#${it.vat_tu_id}`, ton_kho: ton, sl_phieu_nhap: it.sl });
+    }
+  }
+  if (thieuHut.length > 0) {
+    const ds = thieuHut.slice(0, 3).map((t) => `${t.ten_hang} (tồn ${t.ton_kho}, phiếu nhập ${t.sl_phieu_nhap})`).join('; ');
+    return res.status(409).json({
+      error: `Không xóa được: hàng của phiếu nhập này đã xuất đi, xóa sẽ làm tồn kho âm — ${ds}${thieuHut.length > 3 ? ` và ${thieuHut.length - 3} vật tư khác` : ''}. Hãy xóa các phiếu xuất liên quan trước.`,
+      chi_tiet: thieuHut,
+    });
+  }
   // phieu_nhap_item_id không có khoá ngoại: gỡ liên kết ở các dòng xuất trước khi xoá để không bị "treo".
   db.transaction(() => {
     db.prepare(
