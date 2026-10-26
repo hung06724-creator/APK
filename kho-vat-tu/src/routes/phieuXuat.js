@@ -2,6 +2,12 @@ const express = require('express');
 const { db, findOrCreateVatTu, tonKhoCuaVatTu, layCauHinh } = require('../db');
 const { soTienBangChu } = require('../services/soTienBangChu');
 const { taoFilePhieu } = require('../services/xuatMauPhieu');
+const {
+  ghepXuatVoiNhap,
+  chuanHoaNguonKinhPhi,
+  laNguonKinhPhiHopLe,
+  chuoiHoacNull,
+} = require('../services/ghepNhapXuat');
 
 const router = express.Router();
 
@@ -68,8 +74,24 @@ function chuanHoaDongHang(it) {
     don_gia: donGia,
     thanh_tien: Math.round(slThucXuat * donGia),
     ghi_chu: it.ghi_chu || null,
+    tieu_muc: chuoiHoacNull(it.tieu_muc),
+    phieu_nhap_item_id: it.phieu_nhap_item_id ? Number(it.phieu_nhap_item_id) : null,
     vat_tu_id: vatTu ? vatTu.id : null,
   };
+}
+
+// Kiểm tra phieu_nhap_item_id (nếu có) tồn tại và cùng vật tư với dòng xuất. Trả về chuỗi lỗi hoặc null.
+function kiemTraLienKetNhap(items) {
+  const q = db.prepare('SELECT id, vat_tu_id FROM phieu_nhap_items WHERE id = ?');
+  for (const it of items) {
+    if (it.phieu_nhap_item_id === null || it.phieu_nhap_item_id === undefined) continue;
+    const n = Number.isInteger(it.phieu_nhap_item_id) ? q.get(it.phieu_nhap_item_id) : null;
+    if (!n) return `phieu_nhap_item_id=${it.phieu_nhap_item_id} không tồn tại (dòng "${it.ten_hang}")`;
+    if (it.vat_tu_id && n.vat_tu_id && it.vat_tu_id !== n.vat_tu_id) {
+      return `Dòng xuất "${it.ten_hang}" không cùng vật tư với dòng nhập phieu_nhap_item_id=${n.id}`;
+    }
+  }
+  return null;
 }
 
 // Lưu 1 phiếu xuất (đã chuẩn hóa dòng hàng) — PHẢI gọi bên trong 1 db.transaction().
@@ -84,9 +106,9 @@ function luuMotPhieuXuat(p) {
     .prepare(
       `INSERT INTO phieu_xuat
        (so_phieu, ngay, no_tk, co_tk, nguoi_nhan, don_vi, ly_do_xuat, xuat_tai_kho, dia_diem, so_chung_tu_goc,
-        tong_tien_hang, thue_suat, tien_thue, tong_cong, tong_bang_chu)
+        tong_tien_hang, thue_suat, tien_thue, tong_cong, tong_bang_chu, tk_doi_ung, tieu_muc, nguon_kinh_phi)
        VALUES (@so_phieu,@ngay,@no_tk,@co_tk,@nguoi_nhan,@don_vi,@ly_do_xuat,@xuat_tai_kho,@dia_diem,@so_chung_tu_goc,
-               @tong_tien_hang,@thue_suat,@tien_thue,@tong_cong,@tong_bang_chu)`
+               @tong_tien_hang,@thue_suat,@tien_thue,@tong_cong,@tong_bang_chu,@tk_doi_ung,@tieu_muc,@nguon_kinh_phi)`
     )
     .run({
       so_phieu: p.so_phieu || null,
@@ -104,26 +126,42 @@ function luuMotPhieuXuat(p) {
       tien_thue: tienThue,
       tong_cong: tongCong,
       tong_bang_chu: p.tong_bang_chu || soTienBangChu(tongCong),
+      tk_doi_ung: chuoiHoacNull(p.tk_doi_ung),
+      tieu_muc: chuoiHoacNull(p.tieu_muc),
+      nguon_kinh_phi: chuanHoaNguonKinhPhi(p.nguon_kinh_phi),
     });
 
   const phieuId = info.lastInsertRowid;
   const insertItem = db.prepare(
     `INSERT INTO phieu_xuat_items
-     (phieu_xuat_id, vat_tu_id, stt, ten_hang, ma_so, dvt, sl_yeu_cau, sl_thuc_xuat, don_gia, thanh_tien, ghi_chu)
-     VALUES (@phieu_xuat_id,@vat_tu_id,@stt,@ten_hang,@ma_so,@dvt,@sl_yeu_cau,@sl_thuc_xuat,@don_gia,@thanh_tien,@ghi_chu)`
+     (phieu_xuat_id, vat_tu_id, stt, ten_hang, ma_so, dvt, sl_yeu_cau, sl_thuc_xuat, don_gia, thanh_tien, ghi_chu,
+      tieu_muc, phieu_nhap_item_id)
+     VALUES (@phieu_xuat_id,@vat_tu_id,@stt,@ten_hang,@ma_so,@dvt,@sl_yeu_cau,@sl_thuc_xuat,@don_gia,@thanh_tien,@ghi_chu,
+             @tieu_muc,@phieu_nhap_item_id)`
   );
-  for (const row of rows) insertItem.run({ phieu_xuat_id: phieuId, ...row });
+  for (const row of rows) {
+    insertItem.run({
+      phieu_xuat_id: phieuId,
+      ...row,
+      tieu_muc: chuoiHoacNull(row.tieu_muc),
+      phieu_nhap_item_id: row.phieu_nhap_item_id || null,
+    });
+  }
   return phieuId;
 }
 
 // body: { so_phieu, ngay, nguoi_nhan, don_vi, ly_do_xuat, xuat_tai_kho, dia_diem,
-//         items: [{ vat_tu_id? , ten_hang, dvt, sl_yeu_cau, sl_thuc_xuat, don_gia, ghi_chu }] }
+//         tk_doi_ung, tieu_muc, nguon_kinh_phi ('661.2' | '337', mặc định '661.2'),   // trường cho Sổ tổng hợp
+//         items: [{ vat_tu_id? , ten_hang, dvt, sl_yeu_cau, sl_thuc_xuat, don_gia, ghi_chu,
+//                   tieu_muc?, phieu_nhap_item_id? (dòng nhập mà dòng xuất này lấy từ) }] }
 router.post('/', (req, res) => {
   const b = req.body || {};
   const itemsTho = Array.isArray(b.items) ? b.items : [];
   if (itemsTho.length === 0) return res.status(400).json({ error: 'Phiếu xuất cần ít nhất 1 dòng hàng hóa' });
 
   const items = itemsTho.map(chuanHoaDongHang);
+  const loiLienKet = kiemTraLienKetNhap(items);
+  if (loiLienKet) return res.status(400).json({ error: loiLienKet });
   const thieuHut = kiemTraTonKho(items);
   if (thieuHut.length > 0) {
     return res.status(400).json({ error: 'Không đủ tồn kho cho một số vật tư', chi_tiet: thieuHut });
@@ -166,6 +204,10 @@ router.post('/phan-bo', (req, res) => {
     xuat_tai_kho: b.xuat_tai_kho || null,
     dia_diem: b.dia_diem || null,
     thue_suat: Number(b.thue_suat) || 0,
+    // Thừa hưởng trường sổ sách từ phiếu nhập gốc, trừ khi body ghi đè.
+    tk_doi_ung: chuoiHoacNull(b.tk_doi_ung) || phieuNhap.tk_doi_ung || null,
+    tieu_muc: chuoiHoacNull(b.tieu_muc) || phieuNhap.tieu_muc || null,
+    nguon_kinh_phi: chuanHoaNguonKinhPhi(chuoiHoacNull(b.nguon_kinh_phi) || phieuNhap.nguon_kinh_phi),
   };
 
   const canhBao = [];
@@ -193,6 +235,8 @@ router.post('/phan-bo', (req, res) => {
           don_gia: it.don_gia,
           thanh_tien: Math.round(sl * it.don_gia),
           ghi_chu: it.ghi_chu,
+          tieu_muc: it.tieu_muc || null,
+          phieu_nhap_item_id: it.id,
         });
       }
     });
@@ -219,6 +263,76 @@ router.post('/phan-bo', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Tách phiếu thất bại: ' + err.message });
   }
+});
+
+// Ghép tự động các dòng xuất CHƯA có phieu_nhap_item_id với dòng nhập tương ứng trên toàn DB
+// (heuristic ở src/services/ghepNhapXuat.js). Không đụng các dòng đã có liên kết.
+// body (tuỳ chọn): { cho_phep_lech_don_gia: true }  — mặc định đơn giá phải bằng nhau.
+router.post('/ghep-tu-dong', (req, res) => {
+  const b = req.body || {};
+  try {
+    const kq = ghepXuatVoiNhap({ db, choPhepLechDonGia: b.cho_phep_lech_don_gia === true });
+    res.json(kq);
+  } catch (err) {
+    res.status(500).json({ error: 'Ghép tự động thất bại: ' + err.message });
+  }
+});
+
+// Sửa riêng các trường sổ sách của phiếu xuất đã lưu (không đụng số liệu hàng hóa/tiền/tồn kho).
+// body: { tk_doi_ung?, tieu_muc?, nguon_kinh_phi?, items?: [{ id, tieu_muc?, phieu_nhap_item_id? }] }
+// Trường nào không gửi thì giữ nguyên; null/"" với tk_doi_ung/tieu_muc/phieu_nhap_item_id = xoá về null.
+router.put('/:id/so-sach', (req, res) => {
+  const b = req.body || {};
+  const phieu = db.prepare('SELECT * FROM phieu_xuat WHERE id = ?').get(req.params.id);
+  if (!phieu) return res.status(404).json({ error: 'Không tìm thấy phiếu xuất' });
+
+  if (b.nguon_kinh_phi !== undefined && b.nguon_kinh_phi !== null && String(b.nguon_kinh_phi).trim() !== '' && !laNguonKinhPhiHopLe(b.nguon_kinh_phi)) {
+    return res.status(400).json({ error: "nguon_kinh_phi chỉ nhận '661.2' hoặc '337'" });
+  }
+  const itemsGui = b.items === undefined ? [] : b.items;
+  if (!Array.isArray(itemsGui)) return res.status(400).json({ error: 'items phải là mảng' });
+  const dongHienCo = new Map(
+    db.prepare('SELECT id, vat_tu_id, ten_hang FROM phieu_xuat_items WHERE phieu_xuat_id = ?').all(phieu.id).map((r) => [r.id, r])
+  );
+  const layNhap = db.prepare('SELECT id, vat_tu_id FROM phieu_nhap_items WHERE id = ?');
+  for (const it of itemsGui) {
+    const dong = it && dongHienCo.get(Number(it.id));
+    if (!dong) return res.status(400).json({ error: `Dòng hàng id=${it && it.id} không thuộc phiếu xuất ${phieu.id}` });
+    if ('phieu_nhap_item_id' in it && it.phieu_nhap_item_id !== null && it.phieu_nhap_item_id !== '') {
+      const idNhap = Number(it.phieu_nhap_item_id);
+      const n = Number.isInteger(idNhap) ? layNhap.get(idNhap) : null;
+      if (!n) return res.status(400).json({ error: `phieu_nhap_item_id=${it.phieu_nhap_item_id} không tồn tại` });
+      if (dong.vat_tu_id && n.vat_tu_id && dong.vat_tu_id !== n.vat_tu_id) {
+        return res.status(400).json({ error: `Dòng xuất "${dong.ten_hang}" không cùng vật tư với dòng nhập ${n.id}` });
+      }
+    }
+  }
+
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE phieu_xuat SET tk_doi_ung = ?, tieu_muc = ?, nguon_kinh_phi = ? WHERE id = ?').run(
+      b.tk_doi_ung !== undefined ? chuoiHoacNull(b.tk_doi_ung) : phieu.tk_doi_ung,
+      b.tieu_muc !== undefined ? chuoiHoacNull(b.tieu_muc) : phieu.tieu_muc,
+      b.nguon_kinh_phi !== undefined ? chuanHoaNguonKinhPhi(b.nguon_kinh_phi) : phieu.nguon_kinh_phi,
+      phieu.id
+    );
+    const updTieuMuc = db.prepare('UPDATE phieu_xuat_items SET tieu_muc = ? WHERE id = ? AND phieu_xuat_id = ?');
+    const updNhap = db.prepare('UPDATE phieu_xuat_items SET phieu_nhap_item_id = ? WHERE id = ? AND phieu_xuat_id = ?');
+    for (const it of itemsGui) {
+      if ('tieu_muc' in it) updTieuMuc.run(chuoiHoacNull(it.tieu_muc), Number(it.id), phieu.id);
+      if ('phieu_nhap_item_id' in it) {
+        const v = it.phieu_nhap_item_id === null || it.phieu_nhap_item_id === '' ? null : Number(it.phieu_nhap_item_id);
+        updNhap.run(v, Number(it.id), phieu.id);
+      }
+    }
+  });
+  try {
+    tx();
+  } catch (err) {
+    return res.status(500).json({ error: 'Cập nhật sổ sách thất bại: ' + err.message });
+  }
+  const moi = db.prepare('SELECT * FROM phieu_xuat WHERE id = ?').get(phieu.id);
+  const items = db.prepare('SELECT * FROM phieu_xuat_items WHERE phieu_xuat_id = ? ORDER BY stt').all(phieu.id);
+  res.json({ ...moi, items });
 });
 
 router.delete('/:id', (req, res) => {

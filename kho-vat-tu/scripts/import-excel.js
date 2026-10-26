@@ -9,6 +9,7 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const { db, findOrCreateVatTu } = require('../src/db');
 const { soTienBangChu } = require('../src/services/soTienBangChu');
+const { ghepXuatVoiNhap } = require('../src/services/ghepNhapXuat');
 
 const filePath = process.argv[2];
 if (!filePath) {
@@ -243,6 +244,14 @@ async function main() {
   });
 
   console.log(`\nHoàn tất: ${tongSoNhap} phiếu nhập, ${tongSoXuat} phiếu xuất đã được nạp vào database.`);
+
+  // Gắn phieu_nhap_item_id cho các dòng xuất (phục vụ Sổ tổng hợp nhập xuất) bằng heuristic
+  // an toàn; dòng nào không ghép được thì để trống, có thể gắn tay sau trong màn hình sổ.
+  const kq = ghepXuatVoiNhap({ db });
+  console.log(
+    `Ghép dòng xuất với dòng nhập: ghép được ${kq.ghep_duoc}/${kq.tong_xem_xet} dòng, ` +
+      `không ghép được ${kq.khong_ghep_duoc} dòng (để trống).`
+  );
   console.log('Mở website và xem lại mục "Tồn kho" / "Phiếu nhập" / "Phiếu xuất" để kiểm tra.');
 }
 

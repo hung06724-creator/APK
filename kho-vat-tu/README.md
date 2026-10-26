@@ -73,6 +73,15 @@ công cụ hỗ trợ nhập liệu nhanh, không phải tự động hoàn toà
 cũng tự cảnh báo nếu hóa đơn đó là do Trường **xuất ra** (bán) thay vì mua vào, để
 tránh tạo nhầm phiếu nhập kho.
 
+## Dữ liệu cho Sổ tổng hợp nhập xuất vật tư (API)
+
+Mỗi phiếu nhập/xuất lưu thêm `tk_doi_ung`, `tieu_muc`, `nguon_kinh_phi` (`661.2` hoặc `337`,
+mặc định `661.2`); mỗi dòng hàng có `tieu_muc` riêng, dòng xuất có `phieu_nhap_item_id`
+(lấy từ dòng nhập nào). Sửa riêng các trường này cho phiếu đã lưu bằng
+`PUT /api/phieu-nhap/:id/so-sach` và `PUT /api/phieu-xuat/:id/so-sach`. Gắn tự động các dòng
+xuất cũ chưa có liên kết bằng `POST /api/phieu-xuat/ghep-tu-dong` (`scripts/import-excel.js`
+cũng tự gọi sau khi nạp); dòng không ghép được để trống để gắn tay.
+
 ## Cấu trúc thư mục
 
 ```
